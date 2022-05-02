@@ -10,7 +10,7 @@ from cv2 import MORPH_ELLIPSE
 import math
 from cv2 import edgePreservingFilter
 import numpy as np
-# import imutils
+import imutils
 # from scipy import signal
 
 import rospy
@@ -222,7 +222,8 @@ def april_tag_info(id):
         info (tuple): (centerx,centery,angle) center x, y are floats
     """
     global image
-    result=detector.detect(image)
+    img=cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
+    result=detector.detect(img)
     for index in range(len(result)):
         if result[index].tag_id==id:
             center_loc=result[index].center
@@ -268,8 +269,10 @@ def find_z_from_average_depth(depth):
     elif depth>levels[2][0] and depth<levels[2][1]:
         return brick_height*3
     elif depth>levels[1][0] and depth<levels[1][1]:
+        print('lev1')
         return brick_height*2
     elif depth>levels[0][0] and depth<levels[0][1]:
+        print('here')
         return brick_height*1
     return False
     
@@ -351,8 +354,8 @@ def find_brick_center():
         # im3,contours,hierarchy=cv2.findContours(mask_dilate.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
 
         contours=cv2.findContours(mask_dilate.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
-        # contours=imutils.grab_contours(contours)
-        contours=contours[0]
+        contours=imutils.grab_contours(contours)
+        # contours=contours[0]
 
         for contr in contours:
             M=cv2.moments(contr)
@@ -410,8 +413,8 @@ def find_brick_center():
             cannyblob = cv2.Canny(cv2.equalizeHist(grouped_brick_images[i]),lower_threshold,upper_threshold,apertureSize = aper)
 
             contours=cv2.findContours(cannyblob.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
-            # contours=imutils.grab_contours(contours)
-            contours=contours[0]
+            contours=imutils.grab_contours(contours)
+            # contours=contours[0]
 
             for contr in contours:
                 M=cv2.moments(contr)
@@ -487,7 +490,7 @@ def find_brick_center():
     for i in range(len(bricks)):
         empty_img=np.zeros_like(image[:,:,0])
         cv2.drawContours(empty_img,bricks,i,color=255,thickness=-1)
-        avg=np.average(depth_image[np.where(empty_img==255)][:,:])
+        avg=np.average(depth_image[np.where(empty_img==255)])
         depth_avg.append(avg)
         depth_brick_indicies.append(i)
 
@@ -503,9 +506,9 @@ def find_brick_center():
     
     end_effector_x=end_effector_tag[0]
     end_effector_y=end_effector_tag[1]
-    end_effector_angle=end_effector_tag[3]
+    end_effector_angle=end_effector_tag[2]
 
-    end_effector_x,end_effector_y,z=convert_pixel_color(end_effector_x,end_effector_y,depth_image[end_effector_y,end_effector_x])
+    end_effector_x,end_effector_y,z=convert_pixel_color(end_effector_x,end_effector_y,depth_image[int(end_effector_y),int(end_effector_x)])
     for index in sorted_bricks_indices:
         brick_center_x=brick_centers[index][0]
         brick_center_y=brick_centers[index][1]
@@ -526,7 +529,8 @@ def find_brick_center():
 
 if __name__=='__main__':
     # rospy.init_node('tester',anonymous=True)
-    end_effector_id=10
+    # end_effector_id=10
+    end_effector_id=9
     listener()
     sleep(1)
     final_bricks=find_brick_center()
@@ -536,14 +540,22 @@ if __name__=='__main__':
     brk_num=0
     
     while z==False and brk_num<len(final_bricks):
+        print(brk_num)
         destination=final_bricks[brk_num]
         z=destination[2]
         brk_num+=1
 
-    if destination:
-        print(destination)
-        cv2.imshow('highest brick', destination[0][4])
-        cv2.waitKey(0)
+    for brk in final_bricks:
+        cv2.imshow(str(brk[2])+'  '+str(brk[0]),brk[4])
+
+    cv2.waitKey(0)
+
+    # if destination:
+    #     print(destination)
+    #     print(final_bricks[0][2])
+    #     cv2.imshow('brick',final_bricks[0][4])
+    #     # cv2.imshow('highest brick', destination[4])
+    #     cv2.waitKey(0)
 
 
 # def locate_center_of_bricks(dilated_mask,bricks,grouping):
