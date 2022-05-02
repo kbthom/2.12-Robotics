@@ -2,6 +2,7 @@
 #consider putting brick detection into a function of its own with a separate group case
 
 import cv2
+from time import sleep
 from cv2 import COLOR_BGR2GRAY
 from cv2 import MORPH_RECT
 from cv2 import MORPH_CROSS
@@ -9,8 +10,8 @@ from cv2 import MORPH_ELLIPSE
 import math
 from cv2 import edgePreservingFilter
 import numpy as np
-import imutils
-from scipy import signal
+# import imutils
+# from scipy import signal
 
 import rospy
 from sensor_msgs.msg import Image, CameraInfo
@@ -21,12 +22,16 @@ from std_msgs.msg import ColorRGBA
 from cv_bridge import CvBridge, CvBridgeError
 import message_filters
 
+import apriltag
+
 cv_bridge=CvBridge()
 
 color='blue'
 
 image=cv2.imread("kyle_color_1.png")
 depth_image=cv2.imread("kyle_depth_1.png")
+image=1
+depth_image=1
 
 
 def convertToOpenCVHSV(H,S,V):
@@ -103,9 +108,6 @@ def convert_pixel_depth(u,v,z):
 #####-----------Pixel Coordinaate Transfom-----------###################
 ########################################################################
 
-def depth(data):
-    "returns alligned depth image"
-    return data
 
 def get_pixel_depth(x,y,data):
     "grabs depth of pixel (x,y) from color image"
@@ -126,13 +128,13 @@ def get_pixel_depth(x,y,data):
 #     return out[location[0],location[1]]
 
 
-color_hue_map=[['red',0,7],['yellow',7,40],['green',40,92],['blue',92,128],['red',128,255]]
-def highest_color(img):
-    Hue=get_average_Hue(img,get_highest_brick())
-    for col in color_hue_map:
-        if Hue>col[1] and Hue<col[2]:
-            color=col[0]
-            return color
+# color_hue_map=[['red',0,7],['yellow',7,40],['green',40,92],['blue',92,128],['red',128,255]]
+# def highest_color(img):
+#     Hue=get_average_Hue(img,get_highest_brick())
+#     for col in color_hue_map:
+#         if Hue>col[1] and Hue<col[2]:
+#             color=col[0]
+#             return color
 
 color_search_order=['blue','green','red','yellow']
 color_search_order=['yellow','blue']
@@ -170,13 +172,16 @@ def get_paramaters(color):
     color_vals={'blue':blue,'green':[],'yellow':yellow,'red':[]}
     return color_vals[color]
 
-def depth_image_func(image_data):
+def depth_image_func(msg):
      global depth_image
      try:
-        im = np.frombuffer(image_data.data, dtype=np.uint8).reshape(image_data.height, image_data.width, -1)
-        # cv_image = cv_bridge.imgmsg_to_cv2(msg, "bgr8")
-        depth_image=im
-        # depth_image=cv_image
+        # im = np.frombuffer(image_data.data, dtype=np.uint8).reshape(image_data.height, image_data.width, -1)
+        cv_image = cv_bridge.imgmsg_to_cv2(msg, desired_encoding = "passthrough")
+        depth_array = np.array(cv_image,dtype=np.float32)
+        # depth_image=depth_array.astype('uint8')
+        # depth_image=im
+        depth_image=depth_array
+
      except CvBridgeError as e:
         print(e)
      return depth_image
@@ -186,27 +191,99 @@ def depth_image_func(image_data):
 def listener():
     rospy.init_node('listener', anonymous=True)
     #rospy.Subscriber("node path",file_type (data i.e. input to function),function_to_run)
-    print('here')
+    
     rospy.Subscriber('/cam_1/color/image_raw',Image,color_image_func)
     rospy.Subscriber("/cam_1/aligned_depth_to_color/image_raw",Image,depth_image_func)
+    print('listened')
 
-def color_image_func(image_data):
+def color_image_func(msg_color):
     global image
     try:
-        im = np.frombuffer(image_data.data, dtype=np.uint8).reshape(image_data.height, image_data.width, -1)
-        # cv_image = cv_bridge.imgmsg_to_cv2(msg, "bgr8")
 
-        image=im
-        cv2.imshow('im',image)
-        # cv2.waitKey(0)
-        # image=cv_image
+        # im = np.frombuffer(image_data.data, dtype=np.uint8).reshape(image_data.height, image_data.width, -1)
+        cv_image = cv_bridge.imgmsg_to_cv2(msg_color, "bgr8")
+        image=cv_image
+        # image=im
+
+        
     except CvBridgeError as e:
         print(e)
     return image
 
+detector=apriltag.Detector()
+
+def april_tag_info(id):
+    """Finds the center location and angle in image frame of april tag
+
+    Args:
+        id (int): id of april tag whose information you would like
+
+    Returns:
+        info (tuple): (centerx,centery,angle) center x, y are floats
+    """
+    global image
+    result=detector.detect(image)
+    for index in range(len(result)):
+        if result[index].tag_id==id:
+            center_loc=result[index].center
+            center_x=center_loc[0]
+            center_y=center_loc[1]
+            top_right_loc=result[index].corners[1]
+            top_right_x=top_right_loc[0]
+            top_right_y=top_right_loc[1]
+            angle=math.atan2(center_y-top_right_y,top_right_x-center_x)
+
+            return (center_x,center_y,angle)
+
+levels=[[1005,1095],[930,1095],[840,930],[755,840]] #ranges of depths for brick to be expected
+
+def create_level_image(depth_array,image):
+    """creates a mask of depth level
+
+    Args:
+        depth_array (array): array of depth in mm for x_y locations
+        image (image): image of course
+
+    Returns:
+        tuple: (new image only in level, level at)
+    """
+    level=3
+    while level>-1:
+        depth_range=levels[level]
+        level_image=np.where(depth_array>depth_range[0] and depth_array<depth_range[1],0,255)
+        level_image = level_image.astype('uint8')
+
+        if np.count_nonzero(level_image)>50000:
+            return (level_image,level)
+        level-=1
+    print('depth failure')
+
+brick_height=82.6
+
+def find_z_from_average_depth(depth):
+    if depth<740:
+        return False
+    elif depth>levels[3][0] and depth<levels[3][1]:
+        return brick_height*4
+    elif depth>levels[2][0] and depth<levels[2][1]:
+        return brick_height*3
+    elif depth>levels[1][0] and depth<levels[1][1]:
+        return brick_height*2
+    elif depth>levels[0][0] and depth<levels[0][1]:
+        return brick_height*1
+    return False
+    
+
 def find_brick_center():
     global image
     global depth_image
+
+    end_effector_tag=april_tag_info(end_effector_id)
+
+    # image=image[:,end_effector_tag[0]:]
+
+
+    print('starting main')
     # image=cv2.imread("kyle_color_1.png")
     # depth_image=cv2.imread("kyle_depth_1.png")
     # image=image[:,572:]
@@ -274,7 +351,8 @@ def find_brick_center():
         # im3,contours,hierarchy=cv2.findContours(mask_dilate.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
 
         contours=cv2.findContours(mask_dilate.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
-        contours=imutils.grab_contours(contours)
+        # contours=imutils.grab_contours(contours)
+        contours=contours[0]
 
         for contr in contours:
             M=cv2.moments(contr)
@@ -332,7 +410,8 @@ def find_brick_center():
             cannyblob = cv2.Canny(cv2.equalizeHist(grouped_brick_images[i]),lower_threshold,upper_threshold,apertureSize = aper)
 
             contours=cv2.findContours(cannyblob.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
-            contours=imutils.grab_contours(contours)
+            # contours=imutils.grab_contours(contours)
+            contours=contours[0]
 
             for contr in contours:
                 M=cv2.moments(contr)
@@ -367,34 +446,7 @@ def find_brick_center():
                     brick_colors.append(color)
                     brick_names.append("brick_"+str((cx+x_offset,cy+y_offset)))
 
-#______________sort bricks by decreasing depth____________##
     
-    depth_brick_indicies=[]
-    depth_avg=[]
-
-    for i in range(len(bricks)):
-        empty_img=np.zeros_like(image[:,:,0])
-        cv2.drawContours(empty_img,bricks,i,color=255,thickness=-1)
-        avg=np.average(depth_image[np.where(empty_img==255)][:,:])
-        depth_avg.append(avg)
-        depth_brick_indicies.append(i)
-
-    zipped_list=zip(depth_avg,depth_brick_indicies)
-    sorted_zipped_list=sorted(zipped_list)
-
-    sorted_bricks_indices=[element for _, element in sorted_zipped_list]
-
-    sorted_brick_images=[]
-    sorted_depth_averages=[]
-    sorted_brick_angles=[]
-    for index in sorted_bricks_indices:
-        # brick_center_x=brick_centers[index][0]
-        # brick_center_y=brick_centers[index][1]
-        brick_angle=brick_angles[index]
-        brick_image=brick_images[index]
-        sorted_brick_images.append(brick_image)
-        # final_bricks.append((brick_center_x,brick_center_y,brick_angle,brick_image))
-
 #____________________locate center hole in bricks with hough circle detection_____________#
         
     arg1,arg2,min_distance,dp_100,min_rad,max_rad=paramaters[20:26]
@@ -402,7 +454,7 @@ def find_brick_center():
     for brick_num in range(len(brick_images)):
         brk_img=brick_images[brick_num]
 
-        cv2.imshow("brick "+str(brick_num),brk_img)
+        # cv2.imshow("brick "+str(brick_num),brk_img)
         circle_image=cv2.cvtColor(brk_img.copy(),cv2.COLOR_BGR2GRAY)
         circle_image=cv2.equalizeHist(circle_image)
 
@@ -427,21 +479,71 @@ def find_brick_center():
             brick_x_offset,brick_y_offset=brick_offset[brick_num]
             brick_centers.append((int(closest_circle[0])+brick_x_offset,int(closest_circle[1])+brick_y_offset))
 
-    cv2.waitKey(0)
+#______________sort bricks by decreasing depth____________##
     
+    depth_brick_indicies=[]
+    depth_avg=[]
+
+    for i in range(len(bricks)):
+        empty_img=np.zeros_like(image[:,:,0])
+        cv2.drawContours(empty_img,bricks,i,color=255,thickness=-1)
+        avg=np.average(depth_image[np.where(empty_img==255)][:,:])
+        depth_avg.append(avg)
+        depth_brick_indicies.append(i)
+
+    zipped_list=zip(depth_avg,depth_brick_indicies)
+    sorted_zipped_list=sorted(zipped_list)
+
+    sorted_bricks_indices=[element for _, element in sorted_zipped_list]
+
+    sorted_brick_images=[]
+    sorted_depth_averages=depth_avg
+    sorted_brick_angles=[]
+    sorted_brick_centers=[]
+    
+    end_effector_x=end_effector_tag[0]
+    end_effector_y=end_effector_tag[1]
+    end_effector_angle=end_effector_tag[3]
+
+    end_effector_x,end_effector_y,z=convert_pixel_color(end_effector_x,end_effector_y,depth_image[end_effector_y,end_effector_x])
+    for index in sorted_bricks_indices:
+        brick_center_x=brick_centers[index][0]
+        brick_center_y=brick_centers[index][1]
+        brick_angle=brick_angles[index]
+        brick_image=brick_images[index]
+        depth=sorted_depth_averages[index]
+        brick_z=find_z_from_average_depth(depth)
+        sorted_brick_images.append(brick_image)
+
+        brick_center_x, brick_center_y,depth=convert_pixel_color(brick_center_x,brick_center_y,depth)
+
+
+
+        final_bricks.append((brick_center_x- end_effector_x,brick_center_y- end_effector_y,brick_z,brick_angle-end_effector_angle,brick_image))  
 
     return final_bricks
 
 
 if __name__=='__main__':
     # rospy.init_node('tester',anonymous=True)
+    end_effector_id=10
     listener()
-    while True:
-        cv2.imshow('image',image)
-        if cv2.waitKey(0):
-            break
-    destination=find_brick_center()
-# cv2.imshow('highest brick', destination[3])
+    sleep(1)
+    final_bricks=find_brick_center()
+    
+    destination=False
+    z=False
+    brk_num=0
+    
+    while z==False and brk_num<len(final_bricks):
+        destination=final_bricks[brk_num]
+        z=destination[2]
+        brk_num+=1
+
+    if destination:
+        print(destination)
+        cv2.imshow('highest brick', destination[0][4])
+        cv2.waitKey(0)
 
 
 # def locate_center_of_bricks(dilated_mask,bricks,grouping):
