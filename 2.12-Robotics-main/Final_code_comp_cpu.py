@@ -644,7 +644,7 @@ def main(end_effect_tag,calibrate,first):
 
 if __name__=='__main__':
     # rospy.init_node('tester',anonymous=True)
-    print(main((0,0,0,0),False))
+    print(main((0,0,0,0),False,False))
 
     
 
