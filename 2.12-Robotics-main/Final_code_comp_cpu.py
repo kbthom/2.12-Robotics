@@ -254,19 +254,17 @@ def create_level_image(depth_array,image):
 
  
 
-def find_z_from_average_depth(depth):
+def find_brick_height_from_average_depth(depth):
     if depth<740:
         return False
     elif depth>levels[3][0] and depth<levels[3][1]:
-        return brick_height*4
+        return 4
     elif depth>=levels[2][0] and depth<levels[2][1]:
-        return brick_height*3
+        return 3
     elif depth>=levels[1][0] and depth<levels[1][1]:
-        print('lev1')
-        return brick_height*2
+        return 2
     elif depth>=levels[0][0] and depth<levels[0][1]:
-        print('here')
-        return brick_height*1
+        return 1
     return False
     
 
@@ -510,7 +508,7 @@ def find_brick_center():
 
         brick_image=cv2.circle(brick_image,(brick_center_x,brick_center_y),2,(0,0,255),3)
         depth=sorted_depth_averages[index]
-        brick_z=find_z_from_average_depth(depth)
+        brick_z=find_brick_height_from_average_depth(depth)
         sorted_brick_images.append(brick_image)
 
         brick_center_x, brick_center_y,depth=convert_pixel_color(brick_center_x,brick_center_y,depth)
@@ -540,7 +538,7 @@ if __name__=='__main__':
     
     while z==False and brk_num<len(final_bricks):
         print(brk_num)
-        destination=final_bricks[brk_num]
+        destination=final_bricks[brk_num][0:4]
         z=destination[2]
         brk_num+=1
 

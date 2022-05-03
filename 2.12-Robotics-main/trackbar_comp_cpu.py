@@ -82,6 +82,10 @@ def create_close_trackbars():
     cv2.createTrackbar("close_size(erode)", "trackbars", 48, 100, callback)
     cv2.createTrackbar("shape", "trackbars", 1, 2, callback)
 
+def create_depth_trackbars():
+    cv2.createTrackbar("depth_lower", "trackbars", 0, 30000, callback)
+    cv2.createTrackbar("depth_upper", "trackbars", 30000, 30000, callback)
+
 def get_trackbar_values(operation):
     values=[]
     for i in track_vals[operation]:
@@ -95,8 +99,9 @@ def depth_image_func(msg):
         # im = np.frombuffer(image_data.data, dtype=np.uint8).reshape(image_data.height, image_data.width, -1)
         cv_image = cv_bridge.imgmsg_to_cv2(msg, desired_encoding = "passthrough")
         depth_array = np.array(cv_image,dtype=np.float32)
-        # depth_image=depth_array.astype('uint8')
+
         # depth_image=im
+
         depth_image=depth_array
 
      except CvBridgeError as e:
@@ -134,11 +139,12 @@ Canny_track_names=["lower_threshold","upper_threshold","aper"]
 Area_track_names=["lower_area","upper_area","pad"]
 line_track_names=["min_intersections"]
 hough_circ_track_names=["arg1 (higher canny thresh)","arg2 (accumulator thresh)","min_distance","dp*100","Min Radius", "Max Radius"]
+depth_track_names=["depth_lower","depth_upper"]
 close_track_names=["close_size(dilate)","close_size(erode)","shape"]
-track_vals={"HSV":HSV_track_names, "E/D":Erode_Dilate_track_names, "Canny":Canny_track_names,'Area':Area_track_names, "Hough Circle":hough_circ_track_names,"lines":line_track_names,'close':close_track_names}
+track_vals={"HSV":HSV_track_names, "E/D":Erode_Dilate_track_names, "Canny":Canny_track_names,'Area':Area_track_names, "Hough Circle":hough_circ_track_names,"lines":line_track_names,'close':close_track_names,'depth':depth_track_names}
 
     
-colors={'b':[102,129,101,129,255,255],'r':[],'g':[],'y':[22,86,70,41,255,255]}
+colors={'b':[102,129,101,129,255,255],'r':[162,168,75,255,255,255],'g':[80,168,75,92,255,255],'y':[22,86,70,41,255,255]}
 
 def create_trackbars():
     create_HSV_trackbars(colors['y'])
@@ -148,6 +154,7 @@ def create_trackbars():
     create_circle_trackbars()
     create_line_trackbars()
     create_close_trackbars()
+    create_depth_trackbars()
 
 ########################################################################
 #####-----------Pixel Coordinaate Transfom-----------###################
@@ -218,27 +225,10 @@ def get_pixel_depth(x,y,data):
     "grabs depth of pixel (x,y) from color image"
     return data[x,y]
 
-def get_highest_brick():
-    data=depth()
-    kernel=np.ones((12,12))
-    out = signal.convolve2d(data, kernel, boundary='wrap', mode='same')/kernel.sum()
-    sz=out.shape
-    location=np.where(out==np.amin(out))[0]
-    return location
-            
 
-def get_average_Hue(img,location):
-    kernel=np.ones((12,12))
-    out = signal.convolve2d(img[:,:,0], kernel, boundary='wrap', mode='same')/kernel.sum()
-    return out[location[0],location[1]]
+
 
 color_hue_map=[['red',0,7],['yellow',7,40],['green',40,92],['blue',92,128],['red',128,255]]
-def highest_color(img):
-    Hue=get_average_Hue(img,get_highest_brick())
-    for col in color_hue_map:
-        if Hue>col[1] and Hue<col[2]:
-            color=col[0]
-            return color
 
 color_search_order=['blue','green','red','yellow']
 
@@ -284,10 +274,12 @@ while True:
     # image=cv2.imread(imagelink)
     # # "frame000000.png"
     # depth_image=cv2.imread("kyle_depth_1.png")
-
+    lower_depth,upper_depth=get_trackbar_values('depth')
+    depth_img=np.where(depth_image>lower_depth and depth_image<upper_depth,255,0)
+    depth_img=depth_img.astype('uint8')
     
-
-    
+    image_at_depth=cv2.bitwise_and(image,image,mask=depth_img)
+    cv2.imshow('depth_masked',image_at_depth)
     x_halfway=585
     # image=image[:,x_halfway:,:]
     # image=cv2.flip(image, 2) #flip across yaxis
@@ -512,9 +504,10 @@ while True:
         # cv2.imshow("bricksfilled",empty_img)
         # cv2.imshow("highest",brick_images[min_i])
         
-        if show_bricks:
-            for i in range(len(brick_images)):
-                cv2.imshow(brick_names[i],brick_images[i])
+#-----------___________________________________________________
+        # if show_bricks:
+        #     for i in range(len(brick_images)):
+        #         cv2.imshow(brick_names[i],brick_images[i])
         
 
 #_____________April Tags_______________########
@@ -557,7 +550,7 @@ while True:
                 if show_bricks:
                         # eq_brk=cv2.equalizeHist(cv2.cvtColor(brk_img,cv2.COLOR_BGR2GRAY))
                         cv2.circle(rect_bound,brick_centers[brick_num],3,(0,0,255),4)
-                        cv2.imshow(brick_names[brick_num],cv2.cvtColor(brk_img,cv2.COLOR_BGR2GRAY))
+                        # cv2.imshow(brick_names[brick_num],cv2.cvtColor(brk_img,cv2.COLOR_BGR2GRAY))
         
 
 #_______________Canny Edge Detection____________#

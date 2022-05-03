@@ -114,11 +114,7 @@ def click_event(event, x, y, flags, params):
                         (255, 255, 0), 2)
             print('val: '+str(val))
         cv2.imshow('image', img)
-###############################################################3
-def get_average_Hue(img,location):
-    kernel=np.ones((3,3))
-    out = signal.convolve2d(img[:,:,0], kernel, boundary='wrap', mode='same')/kernel.sum()
-    return out[location[1],location[0]]
+###############################################################
 
 cv2.namedWindow("trackbars", 0)
 cv2.createTrackbar("alpha", "trackbars", 6, 200, callback)
@@ -126,9 +122,12 @@ cv2.createTrackbar("alpha", "trackbars", 6, 200, callback)
 # image_file_path="bag_images/rgb/frame000000.png"
 image_file_path="kyle_depth_1.png"
 # image_file_path="frame000000.png"
+
+listener()
+
 img=image
 img_depth=depth_image
-# img2=cv2.cvtColor(img,cv2.COLOR_BGR2HSV)
+
 
 while True:
 
