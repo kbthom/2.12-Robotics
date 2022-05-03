@@ -64,7 +64,6 @@ focal_y_depth=425.2949523925781
 def convert_pixel_color(u,v,z):
     """Converts Pixel location in RGB image to distance 
         from camera in the world coordinate
-
     Args:
         u (int): pixel x location
         v (int): pixel y location
@@ -87,7 +86,6 @@ def convert_pixel_color(u,v,z):
 def convert_pixel_depth(u,v,z):
     """Converts Pixel in depth image location to distance 
         from camera in the world coordinate
-
     Args:
         u (int): pixel x location
         v (int): pixel y location
@@ -144,17 +142,12 @@ def get_paramaters(color):
     Grab Parameters for color
     
     Returns: list of parameters in order of--
-
     H_min, S_min, V_min, H_max, S_max, V_max,
     erode_size, iter_erode, dilate_size, iter_dilate,shape,
     close_size1, close_size2, shape_num,
     low_area, up_area, padding,
     lower_threshold, upper_threshold, aper,
     arg1, arg2, min_distance, dp_100,min_rad, max_rad,
-
-
-
-
     """
     yellow=[22,105,192,41,255,255,
             6,1,10,1,MORPH_ELLIPSE,
@@ -214,10 +207,8 @@ detector=apriltag.Detector()
 
 def april_tag_info(id):
     """Finds the center location and angle in image frame of april tag
-
     Args:
         id (int): id of april tag whose information you would like
-
     Returns:
         info (tuple): (centerx,centery,angle) center x, y are floats
     """
@@ -236,15 +227,17 @@ def april_tag_info(id):
 
             return (center_x,center_y,angle)
 
-levels=[[1005,1095],[930,1095],[840,930],[755,840]] #ranges of depths for brick to be expected
+brick_height=82.5
+table_to_camera=1028
+safety_net=12
+
+levels=[[table_to_camera+15,table_to_camera-brick_height-safety_net],[table_to_camera-brick_height-safety_net,table_to_camera-2*brick_height-safety_net],[table_to_camera-2*brick_height-safety_net,table_to_camera-3*brick_height-safety_net],[table_to_camera-3*brick_height-safety_net,table_to_camera-4*brick_height-safety_net]] #ranges of depths for brick to be expected
 
 def create_level_image(depth_array,image):
     """creates a mask of depth level
-
     Args:
         depth_array (array): array of depth in mm for x_y locations
         image (image): image of course
-
     Returns:
         tuple: (new image only in level, level at)
     """
@@ -259,19 +252,19 @@ def create_level_image(depth_array,image):
         level-=1
     print('depth failure')
 
-brick_height=82.6
+ 
 
 def find_z_from_average_depth(depth):
     if depth<740:
         return False
     elif depth>levels[3][0] and depth<levels[3][1]:
         return brick_height*4
-    elif depth>levels[2][0] and depth<levels[2][1]:
+    elif depth>=levels[2][0] and depth<levels[2][1]:
         return brick_height*3
-    elif depth>levels[1][0] and depth<levels[1][1]:
+    elif depth>=levels[1][0] and depth<levels[1][1]:
         print('lev1')
         return brick_height*2
-    elif depth>levels[0][0] and depth<levels[0][1]:
+    elif depth>=levels[0][0] and depth<levels[0][1]:
         print('here')
         return brick_height*1
     return False
