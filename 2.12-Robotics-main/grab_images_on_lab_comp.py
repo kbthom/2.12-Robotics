@@ -66,21 +66,26 @@ def color_image_func(msg_color):
     return image
 
 color='yellow_'
-number=1
+number=5
 listener()
 sleep(1)
 
 cv2.imshow('col image',image)
 cv2.imshow('depth image',depth_image)
 
-if number-1 !=1:
+if number !=1:
     file='depth_image_'+color+str(number-1)+'.npy'
     depth_loaded=np.load(file,allow_pickle=True,fix_imports=True)
     cv2.imshow('previous depth image',depth_loaded)
-    print(depth_loaded[0:2,0:2])
+    print(depth_loaded[0:50,0:50])
+
+    im_loaded=cv2.imread('color_image_'+color+str(number-1)+'.png')
+    cv2.imshow('prev col im',im_loaded)
 
 key=cv2.waitKey(0)
 
 if key==ord('s'):
-    cv2.imwrite('color_image_'+color+str(number)+'.png',image)
     np.save('depth_image_'+color+str(number),depth_image, allow_pickle=True,fix_imports=True)
+    sleep(1)
+    cv2.imwrite('color_image_'+color+str(number)+'.png',image)
+    
