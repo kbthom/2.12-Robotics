@@ -78,18 +78,25 @@ def create_line_trackbars():
     cv2.createTrackbar("min_intersections", "trackbars", 0, 1000, callback)
 
 def create_close_trackbars():
-    cv2.createTrackbar("close_size(dilate)", "trackbars", 30, 100, callback)
-    cv2.createTrackbar("close_size(erode)", "trackbars", 48, 100, callback)
-    cv2.createTrackbar("shape", "trackbars", 1, 2, callback)
+    cv2.createTrackbar("close_size(dilate)", "trackbars2", 30, 100, callback)
+    cv2.createTrackbar("close_size(erode)", "trackbars2", 48, 100, callback)
+    cv2.createTrackbar("shape", "trackbars2", 1, 2, callback)
 
 def create_depth_trackbars():
-    cv2.createTrackbar("depth_lower", "trackbars", 0, 30000, callback)
-    cv2.createTrackbar("depth_upper", "trackbars", 30000, 30000, callback)
+    cv2.createTrackbar("depth_lower", "trackbars2", 0, 30000, callback)
+    cv2.createTrackbar("depth_upper", "trackbars2", 30000, 30000, callback)
 
 def get_trackbar_values(operation):
     values=[]
     for i in track_vals[operation]:
-        v=cv2.getTrackbarPos(i,"trackbars")
+        v=cv2.getTrackbarPos(i,"trackbars1")
+        values.append(v)
+    return values
+
+def get_trackbar_values2(operation):
+    values=[]
+    for i in track_vals[operation]:
+        v=cv2.getTrackbarPos(i,"trackbars2")
         values.append(v)
     return values
 
@@ -249,10 +256,14 @@ cv2.namedWindow("mask", cv2.WINDOW_AUTOSIZE)
 cv2.namedWindow("erode", cv2.WINDOW_AUTOSIZE)
 cv2.namedWindow("object detect", cv2.WINDOW_AUTOSIZE)
 
-cv2.namedWindow("trackbars", 0)
+cv2.namedWindow("trackbars1", 0)
+cv2.namedWindow("trackbars2", 0)
+
 
 create_trackbars()
-cv2.moveWindow("trackbars",0,0)
+cv2.moveWindow("trackbars1",0,0)
+cv2.moveWindow("trackbars2",10,10)
+
 canny=False
 hough=False
 trace=False
@@ -274,7 +285,7 @@ while True:
     # image=cv2.imread(imagelink)
     # # "frame000000.png"
     # depth_image=cv2.imread("kyle_depth_1.png")
-    lower_depth,upper_depth=get_trackbar_values('depth')
+    lower_depth,upper_depth=get_trackbar_values2('depth')
     depth_img=np.where(depth_image>lower_depth and depth_image<upper_depth,255,0)
     depth_img=depth_img.astype('uint8')
     
@@ -319,7 +330,7 @@ while True:
     mask_dilate= cv2.dilate(mask_erode, dilate_kernel, iterations=iter_dilate)
 
 #_____________________Close Holes_____________####
-    close_size1,close_size2,shape_num = get_trackbar_values("close")
+    close_size1,close_size2,shape_num = get_trackbar_values2("close")
     shape=shapes[shape_num]
     close_size1=max(1,close_size1)
     close_size2=max(1,close_size2)
