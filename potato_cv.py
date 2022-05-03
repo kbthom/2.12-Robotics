@@ -28,12 +28,12 @@ cv_bridge=CvBridge()
 
 color='blue'
 
-image=cv2.imread("color_image_all_4.png")
-depth_image=cv2.imread("depth_image_all_4.npy")
-# image=1
-# depth_image=1
+image=cv2.imread("kyle_color_1.png")
+depth_image=cv2.imread("kyle_depth_1.png")
+image=1
+depth_image=1
 end_effector_id=10
-table_id=9
+table_id=8
 table_tag=0
 end_effector_tag=0
 
@@ -141,7 +141,7 @@ def get_pixel_depth(x,y,data):
 color_search_order=['blue','green','red','yellow']
 color_search_order=['yellow','blue']
 
-def get_paramaters(color,dp):
+def get_paramaters(color):
     """
     Grab Parameters for color
     
@@ -152,18 +152,22 @@ def get_paramaters(color,dp):
     low_area, up_area, padding,
     lower_threshold, upper_threshold, aper,
     arg1, arg2, min_distance, dp_100,min_rad, max_rad,
-    lower_depth, upper_depth,close_size1,close_size2
-
-
     """
-    yellow=[15, 47, 184, 68, 255, 255, 6, 1, 10, 1, MORPH_ELLIPSE, 30, 38, 0, 15500, 31953, 2, 201, 127, 3, 124, 28, 10, 100, 16, 50]
-    blue=[99, 150, 89, 137, 255, 255, 6, 1, 10, 1, MORPH_ELLIPSE, 28, 30, 0, 15500, 27219, 2, 201, 127, 3, 165, 28, 10, 100, 16, 50]
-    green=[84, 172, 75, 96, 255, 255, 6, 1, 10, 1, MORPH_ELLIPSE, 18, 16, 0, 15500, 28000, 2, 201, 127, 3, 124, 28, 10, 100, 16, 50]
-    red=[127, 59, 105, 179, 255, 255, 6, 1, 10, 1, MORPH_ELLIPSE, 33, 31, 0, 15500, 27811, 2, 201, 127, 3, 124, 28, 10, 100, 16, 50]
+    yellow=[22,105,192,41,255,255,
+            6,1,10,1,MORPH_ELLIPSE,
+            30,48,1,
+            8372,23993,2,
+            201,127,3,
+            124,28,10,100,16,50]
+    blue=[102,129,101,129,255,255,
+            6,1,10,1,MORPH_ELLIPSE,
+            30,48,1,
+            8372,29070,2,
+            201,127,3,
+            124,28,10,100,16,50]
 
-    color_vals={'blue':blue,'green':green,'yellow':yellow,'red':red}
-    depth_vals=[[0,771,30,34,25000,38000],[755,876,30,35,16000,32000],[847,947,19,27,8200,30000],[957,1019,19,32,8000,30000]]
-    return color_vals[color]+depth_vals[dp]
+    color_vals={'blue':blue,'green':[],'yellow':yellow,'red':[]}
+    return color_vals[color]
 
 def depth_image_func(msg):
      global depth_image
@@ -182,7 +186,7 @@ def depth_image_func(msg):
 
 
 def listener():
-    rospy.init_node('listener', anonymous=True)
+    # rospy.init_node('listener', anonymous=True)
     #rospy.Subscriber("node path",file_type (data i.e. input to function),function_to_run)
     
     rospy.Subscriber('/cam_1/color/image_raw',Image,color_image_func)
@@ -248,7 +252,7 @@ def april_tag_info(id):
             return (center_x,center_y,angle,median_depth)
 
 brick_height=82.5
-table_to_camera=1017
+table_to_camera=1049
 safety_net=12
 
 levels=[[table_to_camera+15,table_to_camera-brick_height-safety_net],[table_to_camera-brick_height-safety_net,table_to_camera-2*brick_height-safety_net],[table_to_camera-2*brick_height-safety_net,table_to_camera-3*brick_height-safety_net],[table_to_camera-3*brick_height-safety_net,table_to_camera-4*brick_height-safety_net]] #ranges of depths for brick to be expected
@@ -307,8 +311,7 @@ def find_brick_center():
     global table_id
     global table_tag
     global end_effector_tag
-    image2=image
-    
+
     table_tag=april_tag_info(table_id)
     table_offset=3
     if table_tag:
@@ -334,21 +337,19 @@ def find_brick_center():
     brick_offset=[]
 
     final_bricks=[] #list containing all bricks x,y center location and angle in radians
-    color='blue'
+
     for dp in range(len(brick_levels)):
-        paramaters=get_paramaters(color,dp)
-        depth_lower,depth_upper=paramaters[26:28]
+        depth_range=brick_levels[dp]
         brick_stack=4-dp
 
-        image_at_depth=create_depth_mask([depth_lower,depth_upper])
+        image_at_depth=create_depth_mask(depth_range)
         cv2.imshow('depth'+str(brick_stack),image_at_depth)
         cv2.waitKey(0)
 
         for color in color_search_order:
             #find bricks (organized by depth)
-            paramaters=get_paramaters(color,dp)
 
-            
+            paramaters=get_paramaters(color)
 
     #___________________HSV Converstion and HSV removal Mask__________-#        
             H_min, S_min, V_min, H_max, S_max, V_max=paramaters[0:6]
@@ -365,7 +366,7 @@ def find_brick_center():
             mask_dilate= cv2.dilate(mask_erode, dilate_kernel, iterations=iter_dilate)
         
     #_____________________Close Holes_____________####
-            close_size1,close_size2,shape_num=paramaters[28:30]+[1]
+            close_size1,close_size2,shape_num=paramaters[11:14]
 
             kernel_close1=cv2.getStructuringElement(shape,(close_size1,close_size1))
             kernel_close2=cv2.getStructuringElement(shape,(close_size2,close_size2))
@@ -377,7 +378,6 @@ def find_brick_center():
             disp_image=cv2.bitwise_and(image,image, mask=mask_dilate)
             disp_gray=cv2.cvtColor(disp_image, COLOR_BGR2GRAY)
 
-            cv2.imshow('last mask',disp_image)
         #_________Locate Brick Rectangles_______________________###
 
             # brick_local_centers=[] #center in local brick frame
@@ -392,9 +392,8 @@ def find_brick_center():
 
             
 
-            grab_image=image2.copy()
+            grab_image=image.copy()
             low_area, up_area, padding = paramaters[14:17]
-            low_area, up_area=paramaters[30:]
 
             # ##__Grabs contours of HSV removal mask after noise was removed##
             # im3,contours,hierarchy=cv2.findContours(mask_dilate.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
@@ -596,9 +595,9 @@ def find_brick_center():
 
 
                 brick_center_x, brick_center_y,depth=convert_pixel_color(brick_center_x,brick_center_y,table_to_camera-(brick_level*82.5))
-                # print((brick_angle)*180/np.pi)
-                # print((end_effector_angle)*180/np.pi)
-                # print('here',(brick_angle-end_effector_angle)*180/np.pi)
+                print((brick_angle)*180/np.pi)
+                print((end_effector_angle)*180/np.pi)
+                print('here',(brick_angle-end_effector_angle)*180/np.pi)
                 final_bricks.append((brick_center_x - global_end_effector_x,brick_center_y - global_end_effector_y , brick_level ,brick_angle-end_effector_angle,brick_image))
                 
             return final_bricks
@@ -633,32 +632,13 @@ def main(end_effect_tag,calibrate,first):
         cv2.imshow('depth',depth_image)
         final_bricks=find_brick_center()
         
-        final_brick_indices=[]
-        final_brick_x=[]
-        final_brick_y=[]
-
-        destination='false'
+        
         if isinstance(final_bricks,list):
-            for index in range(len(final_bricks)):
-                final_brick_indices.append(index)
-                final_brick_x.append((final_bricks[index][0]-end_effector_tag[0])**2)
-                final_brick_y.append((final_bricks[index][1]-end_effector_tag[1])**2)
-            zipped_list_x1=zip(final_brick_x,final_brick_indices)
-            zipped_list_x2=zip(final_brick_x,final_brick_y)
-            sorted_zipped_list_x1=sorted(zipped_list_x1)
-            sorted_zipped_list_x2=sorted(zipped_list_x2)
-            x_sorted_index=[element for _,element in sorted_zipped_list_x1]
-            x_sorted_y=[element for _,element in sorted_zipped_list_x2]
-            zipped_list_index_y=zip(x_sorted_y,x_sorted_index)
-            sorted_zipped_list_x2=sorted(zipped_list_index_y)
-
-            y_x_sorted_index=[element for _,element in sorted_zipped_list_x2]
-
-            destination=final_bricks[y_x_sorted_index[0]][0:4]
-
-            cv2.imshow('brick wanted',final_bricks[y_x_sorted_index[0]][4])
-        # for brk in final_bricks:
-        #     cv2.imshow(str(brk[2])+'  '+str(brk[0]),brk[4])
+            destination=final_bricks[0][0:4]
+        
+        for brk in final_bricks:
+            cv2.imshow(str(brk[2])+'  '+str(brk[0]),brk[4])
+        print(destination)
         cv2.imshow('im',image)
         cv2.waitKey(0)
         return destination
@@ -731,3 +711,4 @@ if __name__=='__main__':
 
 
 #     return bricks
+
