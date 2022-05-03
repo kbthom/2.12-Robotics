@@ -83,8 +83,8 @@ def create_close_trackbars():
     cv2.createTrackbar("shape", "trackbars", 1, 2, callback)
 
 def create_depth_trackbars():
-    cv2.createTrackbar("depth_lower", "trackbars", 0, 30000, callback)
-    cv2.createTrackbar("depth_upper", "trackbars", 30000, 30000, callback)
+    cv2.createTrackbar("depth_lower", "trackbars", 0, 1500, callback)
+    cv2.createTrackbar("depth_upper", "trackbars", 1500, 1500, callback)
 
 def get_trackbar_values(operation):
     values=[]
@@ -152,7 +152,7 @@ def create_trackbars():
     create_Canny_trackbars()
     create_area_trackbars()
     create_circle_trackbars()
-    create_line_trackbars()
+    # create_line_trackbars()
     create_close_trackbars()
     create_depth_trackbars()
 
@@ -275,7 +275,7 @@ while True:
     # # "frame000000.png"
     # depth_image=cv2.imread("kyle_depth_1.png")
     lower_depth,upper_depth=get_trackbar_values('depth')
-    depth_img=np.where(depth_image>lower_depth and depth_image<upper_depth,255,0)
+    depth_img=np.where((depth_image>lower_depth) & (depth_image<upper_depth),255,0)
     depth_img=depth_img.astype('uint8')
     
     image_at_depth=cv2.bitwise_and(image,image,mask=depth_img)

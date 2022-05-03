@@ -53,7 +53,7 @@ def listener():
     
     rospy.Subscriber('/cam_1/color/image_raw',Image,color_image_func)
     rospy.Subscriber("/cam_1/aligned_depth_to_color/image_raw",Image,depth_image_func)
-    print('listened')
+    # print('listened')
 
 def color_image_func(msg_color):
     global image
@@ -97,7 +97,7 @@ def click_event(event, x, y, flags, params):
         # displaying the coordinates
         # on the image window
         font = cv2.FONT_HERSHEY_SIMPLEX
-        if len(img.shape)==3:
+        if len(img_depth.shape)==3:
             b = img_depth[y, x, 0]
             g = img_depth[y, x, 1]
             r = img_depth[y, x, 2]
@@ -107,7 +107,7 @@ def click_event(event, x, y, flags, params):
             #             (255, 255, 0), 2)
             print('val: '+str(b) + ',' +
                         str(g) + ',' + str(r))
-        elif len(img.shape)==2:
+        elif len(img_depth.shape)==2:
             val = img_depth[y, x]
             cv2.putText(img, str(val) ,
                         (x,y), font, 1,
@@ -116,22 +116,21 @@ def click_event(event, x, y, flags, params):
         cv2.imshow('image', img)
 ###############################################################
 
-cv2.namedWindow("trackbars", 0)
-cv2.createTrackbar("alpha", "trackbars", 6, 200, callback)
 
 # image_file_path="bag_images/rgb/frame000000.png"
 image_file_path="kyle_depth_1.png"
 # image_file_path="frame000000.png"
 
 listener()
-
+sleep(1)
 img=image
 img_depth=depth_image
 
 
 while True:
-
-    
+    listener()
+    img=image
+    img_depth=depth_image
     
     # alph=get_trackbar_values('depth')[0]
     # # img = cv2.applyColorMap(cv2.convertScaleAbs(img,alpha=alph),cv2.COLORMAP_HOT)
@@ -143,7 +142,7 @@ while True:
 
 
     cv2.setMouseCallback('image', click_event)
-    key=cv2.waitKey(10)
+    key=cv2.waitKey(1)
     if key==ord('q'):
         
         cv2.destroyAllWindows()
