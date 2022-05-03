@@ -306,20 +306,6 @@ while True:
     rect_bound=image.copy()
     height,width=image.shape[0:2]
 
-#_____________________Close Holes_____________####
-    close_size1,close_size2,shape_num = get_trackbar_values2("close")
-    shape=shapes[shape_num]
-    close_size1=max(1,close_size1)
-    close_size2=max(1,close_size2)
-
-    kernel_close1=cv2.getStructuringElement(shape,(close_size1,close_size1))
-    kernel_close2=cv2.getStructuringElement(shape,(close_size2,close_size2))
-
-    
-    mask_close=cv2.dilate(depth_img,kernel_close1,iterations=1)
-    mask_close=cv2.erode(mask_close,kernel_close2,iterations=1)
-    cv2.imshow("closing",mask_close)
-
 #__________________denoise after depth______________________#
 
     depth_erode_size, depth_dilate_size = get_trackbar_values2('depth_erode/dilate')
@@ -332,7 +318,7 @@ while True:
     # shape=MORPH_ELLIPSE
 
     erod_kernel=cv2.getStructuringElement(shape,(depth_erode_size,depth_erode_size))
-    mask_erode =cv2.erode(mask_close, erod_kernel, iterations=1)
+    mask_erode =cv2.erode(depth_img, erod_kernel, iterations=1)
 
     dilate_kernel=cv2.getStructuringElement(shape,(depth_dilate_size,depth_dilate_size))
     depth_img_dilate= cv2.dilate(mask_erode, dilate_kernel, iterations=1)
@@ -369,7 +355,19 @@ while True:
     dilate_kernel=cv2.getStructuringElement(shape,(dilate_size,dilate_size))
     mask_dilate= cv2.dilate(mask_erode, dilate_kernel, iterations=iter_dilate)
 
+#_____________________Close Holes_____________####
+    close_size1,close_size2,shape_num = get_trackbar_values2("close")
+    shape=shapes[shape_num]
+    close_size1=max(1,close_size1)
+    close_size2=max(1,close_size2)
 
+    kernel_close1=cv2.getStructuringElement(shape,(close_size1,close_size1))
+    kernel_close2=cv2.getStructuringElement(shape,(close_size2,close_size2))
+
+    
+    mask_close=cv2.dilate(mask_dilate,kernel_close1,iterations=1)
+    mask_close=cv2.erode(mask_close,kernel_close2,iterations=1)
+    cv2.imshow("closing",mask_close)
 
 
 #_____________grabs only objects from eroded dilated binary mask from original image____________#
@@ -379,13 +377,7 @@ while True:
 #________________Centroid and Moment________________#
     if trace:
         low_area, up_area, padding = get_trackbar_values("Area")
-
-        #testing just depth
-        contours=cv2.findContours(depth_img_dilate.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
-
-        #HSV
-        # contours=cv2.findContours(mask_dilate.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
-        
+        contours=cv2.findContours(mask_dilate.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
         contours=imutils.grab_contours(contours)
         # contours=contours[0]
         cv2.drawContours(rect_bound, contours, -1, (255,0,0), 3)

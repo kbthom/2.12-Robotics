@@ -1,5 +1,4 @@
 import cv2
-from time import sleep
 from cv2 import COLOR_BGR2GRAY
 from cv2 import MORPH_RECT
 from cv2 import MORPH_CROSS
@@ -8,24 +7,7 @@ import math
 from cv2 import edgePreservingFilter
 import numpy as np
 import imutils
-# from scipy import signal
-
-import rospy
-from sensor_msgs.msg import Image, CameraInfo
-from visualization_msgs.msg import Marker
-from std_msgs.msg import ColorRGBA
-from time import sleep
-
-
-from cv_bridge import CvBridge, CvBridgeError
-import message_filters
-
-import apriltag
-
-cv_bridge=CvBridge()
-
-image=1
-depth_image=1
+from scipy import signal
 
 color='blue'
 
@@ -78,18 +60,9 @@ def create_line_trackbars():
     cv2.createTrackbar("min_intersections", "trackbars", 0, 1000, callback)
 
 def create_close_trackbars():
-    cv2.createTrackbar("close_size(dilate)", "trackbars2", 30, 100, callback)
-    cv2.createTrackbar("close_size(erode)", "trackbars2", 48, 100, callback)
-    cv2.createTrackbar("shape", "trackbars2", 1, 2, callback)
-
-def create_depth_trackbars():
-    cv2.createTrackbar("depth_lower", "trackbars2", 0, 1500, callback)
-    cv2.createTrackbar("depth_upper", "trackbars2", 1500, 1500, callback)
-
-def create_depth_erode_dilate():
-    cv2.createTrackbar('depth_erode',"trackbars2", 0, 15, callback)
-    cv2.createTrackbar('depth_dilate',"trackbars2", 0, 15, callback)
-
+    cv2.createTrackbar("close_size(dilate)", "trackbars", 30, 100, callback)
+    cv2.createTrackbar("close_size(erode)", "trackbars", 48, 100, callback)
+    cv2.createTrackbar("shape", "trackbars", 1, 2, callback)
 
 def get_trackbar_values(operation):
     values=[]
@@ -98,66 +71,17 @@ def get_trackbar_values(operation):
         values.append(v)
     return values
 
-def get_trackbar_values2(operation):
-    values=[]
-    for i in track_vals[operation]:
-        v=cv2.getTrackbarPos(i,"trackbars2")
-        values.append(v)
-    return values
-
-def depth_image_func(msg):
-     global depth_image
-     try:
-        # im = np.frombuffer(image_data.data, dtype=np.uint8).reshape(image_data.height, image_data.width, -1)
-        cv_image = cv_bridge.imgmsg_to_cv2(msg, desired_encoding = "passthrough")
-        depth_array = np.array(cv_image,dtype=np.float32)
-
-        # depth_image=im
-
-        depth_image=depth_array
-
-     except CvBridgeError as e:
-        print(e)
-     return depth_image
-
-
-
-def listener():
-    rospy.init_node('listener', anonymous=True)
-    #rospy.Subscriber("node path",file_type (data i.e. input to function),function_to_run)
-    
-    rospy.Subscriber('/cam_1/color/image_raw',Image,color_image_func)
-    rospy.Subscriber("/cam_1/aligned_depth_to_color/image_raw",Image,depth_image_func)
-    print('listened')
-
-def color_image_func(msg_color):
-    global image
-    try:
-
-        # im = np.frombuffer(image_data.data, dtype=np.uint8).reshape(image_data.height, image_data.width, -1)
-        cv_image = cv_bridge.imgmsg_to_cv2(msg_color, "bgr8")
-        image=cv_image
-        # image=im
-
-        
-    except CvBridgeError as e:
-        print(e)
-    return image
-
-
 HSV_track_names= ["H_MIN","S_MIN","V_MIN","H_MAX","S_MAX","V_MAX"]
 Erode_Dilate_track_names=["Erode_Size", "Erode_Iterations","Dilate_Size", "Dilate_Iterations"]
 Canny_track_names=["lower_threshold","upper_threshold","aper"]
 Area_track_names=["lower_area","upper_area","pad"]
 line_track_names=["min_intersections"]
 hough_circ_track_names=["arg1 (higher canny thresh)","arg2 (accumulator thresh)","min_distance","dp*100","Min Radius", "Max Radius"]
-depth_track_names=["depth_lower","depth_upper"]
 close_track_names=["close_size(dilate)","close_size(erode)","shape"]
-depth_erode_dilate_track_names=['depth_erode','depth_dilate']
-track_vals={"HSV":HSV_track_names, "E/D":Erode_Dilate_track_names, "Canny":Canny_track_names,'Area':Area_track_names, "Hough Circle":hough_circ_track_names,"lines":line_track_names,'close':close_track_names,'depth':depth_track_names,'depth_erode/dilate':depth_erode_dilate_track_names}
+track_vals={"HSV":HSV_track_names, "E/D":Erode_Dilate_track_names, "Canny":Canny_track_names,'Area':Area_track_names, "Hough Circle":hough_circ_track_names,"lines":line_track_names,'close':close_track_names}
 
     
-colors={'b':[102,129,101,129,255,255],'r':[162,168,75,255,255,255],'g':[80,168,75,92,255,255],'y':[22,86,70,41,255,255]}
+colors={'b':[102,129,101,129,255,255],'r':[],'g':[],'y':[22,86,70,41,255,255]}
 
 def create_trackbars():
     create_HSV_trackbars(colors['y'])
@@ -167,9 +91,6 @@ def create_trackbars():
     create_circle_trackbars()
     create_line_trackbars()
     create_close_trackbars()
-    create_depth_trackbars()
-    create_depth_erode_dilate()
-
 
 ########################################################################
 #####-----------Pixel Coordinaate Transfom-----------###################
@@ -240,10 +161,27 @@ def get_pixel_depth(x,y,data):
     "grabs depth of pixel (x,y) from color image"
     return data[x,y]
 
+def get_highest_brick():
+    data=depth()
+    kernel=np.ones((12,12))
+    out = signal.convolve2d(data, kernel, boundary='wrap', mode='same')/kernel.sum()
+    sz=out.shape
+    location=np.where(out==np.amin(out))[0]
+    return location
+            
 
-
+def get_average_Hue(img,location):
+    kernel=np.ones((12,12))
+    out = signal.convolve2d(img[:,:,0], kernel, boundary='wrap', mode='same')/kernel.sum()
+    return out[location[0],location[1]]
 
 color_hue_map=[['red',0,7],['yellow',7,40],['green',40,92],['blue',92,128],['red',128,255]]
+def highest_color(img):
+    Hue=get_average_Hue(img,get_highest_brick())
+    for col in color_hue_map:
+        if Hue>col[1] and Hue<col[2]:
+            color=col[0]
+            return color
 
 color_search_order=['blue','green','red','yellow']
 
@@ -265,13 +203,9 @@ cv2.namedWindow("erode", cv2.WINDOW_AUTOSIZE)
 cv2.namedWindow("object detect", cv2.WINDOW_AUTOSIZE)
 
 cv2.namedWindow("trackbars", 0)
-cv2.namedWindow("trackbars2", 1)
-
 
 create_trackbars()
 cv2.moveWindow("trackbars",0,0)
-cv2.moveWindow("trackbars2",10,10)
-
 canny=False
 hough=False
 trace=False
@@ -284,69 +218,31 @@ print('top_left',convert_pixel_color(137,231,104.14))
 print('top_right',convert_pixel_color(219,230,104.14))
 print('width',convert_pixel_color(401,412,104.14)[0]-convert_pixel_color(310,411,104.14)[0])
 
-listener()
-sleep(1)
-
 while True:
     # imagelink="bag_images/rgb/frame000000.png"
-    # imagelink="kyle_color_1.png"
-    # image=cv2.imread(imagelink)
-    # # "frame000000.png"
-    # depth_image=cv2.imread("kyle_depth_1.png")
-#____________depth filter________________________________________
-    lower_depth,upper_depth=get_trackbar_values2('depth')
-    depth_img=np.where((depth_image>lower_depth) & (depth_image<upper_depth),255,0)
-    depth_img=depth_img.astype('uint8')
+    imagelink="kyle_color_1.png"
+    image=cv2.imread(imagelink)
+    # "frame000000.png"
+    depth_image=cv2.imread("kyle_depth_1.png")
+
     
 
+    
     x_halfway=585
     # image=image[:,x_halfway:,:]
     # image=cv2.flip(image, 2) #flip across yaxis
     # image=cv2.flip(image, 0)  #flip across x-axis
     rect_bound=image.copy()
     height,width=image.shape[0:2]
-
-#_____________________Close Holes_____________####
-    close_size1,close_size2,shape_num = get_trackbar_values2("close")
-    shape=shapes[shape_num]
-    close_size1=max(1,close_size1)
-    close_size2=max(1,close_size2)
-
-    kernel_close1=cv2.getStructuringElement(shape,(close_size1,close_size1))
-    kernel_close2=cv2.getStructuringElement(shape,(close_size2,close_size2))
-
+    hough_line_img=np.zeros((height,width,1), np.uint8)
     
-    mask_close=cv2.dilate(depth_img,kernel_close1,iterations=1)
-    mask_close=cv2.erode(mask_close,kernel_close2,iterations=1)
-    cv2.imshow("closing",mask_close)
-
-#__________________denoise after depth______________________#
-
-    depth_erode_size, depth_dilate_size = get_trackbar_values2('depth_erode/dilate')
-    depth_erode_size=max(1,depth_erode_size)
-    depth_dilate_size=max(1,depth_dilate_size)
-
-
-    shape=MORPH_RECT #change kernel shape MORPH_    RECT or CROSS or ELLIPSE
-    # shape=MORPH_CROSS
-    # shape=MORPH_ELLIPSE
-
-    erod_kernel=cv2.getStructuringElement(shape,(depth_erode_size,depth_erode_size))
-    mask_erode =cv2.erode(mask_close, erod_kernel, iterations=1)
-
-    dilate_kernel=cv2.getStructuringElement(shape,(depth_dilate_size,depth_dilate_size))
-    depth_img_dilate= cv2.dilate(mask_erode, dilate_kernel, iterations=1)
-#______________-bitwise______________#
-    image_at_depth=cv2.bitwise_and(image,image,mask=depth_img_dilate)
-    cv2.imshow('depth_masked',image_at_depth)
-    image=image_at_depth
-
+    # blur=cv2.GaussianBlur(image, [11,11],0)
 
 #_________-_________HSV Converstion and HSV removal Mask__________-#
     pre_mask=cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     H_min, S_min, V_min, H_max, S_max, V_max= get_trackbar_values("HSV")
     mask=cv2.inRange(pre_mask, (H_min, S_min, V_min), (H_max, S_max, V_max))
-    blurred=cv2.GaussianBlur(image, (11,11),0)
+    blurred=cv2.GaussianBlur(image, [11,11],0)
     pre_depth_mask=cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
     depth_mask=cv2.inRange(pre_depth_mask, (0, S_min+40, V_min), (255, S_max, V_max))
     
@@ -369,7 +265,19 @@ while True:
     dilate_kernel=cv2.getStructuringElement(shape,(dilate_size,dilate_size))
     mask_dilate= cv2.dilate(mask_erode, dilate_kernel, iterations=iter_dilate)
 
+#_____________________Close Holes_____________####
+    close_size1,close_size2,shape_num = get_trackbar_values("close")
+    shape=shapes[shape_num]
+    close_size1=max(1,close_size1)
+    close_size2=max(1,close_size2)
 
+    kernel_close1=cv2.getStructuringElement(shape,(close_size1,close_size1))
+    kernel_close2=cv2.getStructuringElement(shape,(close_size2,close_size2))
+
+    
+    mask_close=cv2.dilate(mask_dilate,kernel_close1,iterations=1)
+    mask_close=cv2.erode(mask_close,kernel_close2,iterations=1)
+    cv2.imshow("closing",mask_close)
 
 
 #_____________grabs only objects from eroded dilated binary mask from original image____________#
@@ -379,15 +287,9 @@ while True:
 #________________Centroid and Moment________________#
     if trace:
         low_area, up_area, padding = get_trackbar_values("Area")
-
-        #testing just depth
-        contours=cv2.findContours(depth_img_dilate.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
-
-        #HSV
-        # contours=cv2.findContours(mask_dilate.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
-        
-        contours=imutils.grab_contours(contours)
-        # contours=contours[0]
+        contours=cv2.findContours(mask_dilate.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
+        # contours=imutils.grab_contours(contours)
+        contours=contours[0]
         cv2.drawContours(rect_bound, contours, -1, (255,0,0), 3)
         bricks=[]
         brick_centers=[]
@@ -430,8 +332,8 @@ while True:
                     orient=angle
                 theta=orient*np.pi/180
                 length=50
-                p1x=int(round(cx+length*math.cos(theta)))
-                p1y=int(round(cy-length*math.sin(theta)))
+                p1x=round(cx+length*math.cos(theta))
+                p1y=round(cy-length*math.sin(theta))
                 cv2.line(rect_bound,(cx,cy),(p1x,p1y),[255,192,203],2)
 
                 cv2.circle(rect_bound,(cx,cy),2,(0,0,255),3)
@@ -476,8 +378,8 @@ while True:
 
 
             contours=cv2.findContours(cannyblob.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
-            # contours=contours[0]
-            contours=imutils.grab_contours(contours)
+            contours=contours[0]
+            # contours=imutils.grab_contours(contours)
             # cv2.drawContours(rect_bound, contours, -1, (255,0,0), 2)
             for contr in contours:
                 M=cv2.moments(contr)
@@ -505,8 +407,8 @@ while True:
                     print(orient)
                     theta=orient*np.pi/180
                     length=50
-                    p1x=int(round(cx+length*math.cos(theta)))+x_offset
-                    p1y=int(round(cy-length*math.sin(theta)))+y_offset
+                    p1x=round(cx+length*math.cos(theta))+x_offset
+                    p1y=round(cy-length*math.sin(theta))+y_offset
                     cv2.line(rect_bound,(cx+x_offset,cy+y_offset),(p1x,p1y),[255,192,203],3)
 
                     cv2.circle(rect_bound,(cx+x_offset,cy+y_offset),2,(0,0,255),3)
@@ -550,10 +452,9 @@ while True:
         # cv2.imshow("bricksfilled",empty_img)
         # cv2.imshow("highest",brick_images[min_i])
         
-#-----------___________________________________________________
-        # if show_bricks:
-        #     for i in range(len(brick_images)):
-        #         cv2.imshow(brick_names[i],brick_images[i])
+        if show_bricks:
+            for i in range(len(brick_images)):
+                cv2.imshow(brick_names[i],brick_images[i])
         
 
 #_____________April Tags_______________########
@@ -596,7 +497,7 @@ while True:
                 if show_bricks:
                         # eq_brk=cv2.equalizeHist(cv2.cvtColor(brk_img,cv2.COLOR_BGR2GRAY))
                         cv2.circle(rect_bound,brick_centers[brick_num],3,(0,0,255),4)
-                        # cv2.imshow(brick_names[brick_num],cv2.cvtColor(brk_img,cv2.COLOR_BGR2GRAY))
+                        cv2.imshow(brick_names[brick_num],cv2.cvtColor(brk_img,cv2.COLOR_BGR2GRAY))
         
 
 #_______________Canny Edge Detection____________#

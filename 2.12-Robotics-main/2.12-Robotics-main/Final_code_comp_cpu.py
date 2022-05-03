@@ -313,7 +313,6 @@ def find_brick_center():
     global end_effector_tag
 
     table_tag=april_tag_info(table_id)
-    table_offset=3
     if table_tag:
         # image=image[:,end_effector_tag[0]:]
         end_effector_offset=3  #offset to cut off to the left of april tag
@@ -617,7 +616,7 @@ def main(end_effect_tag,calibrate,first):
         end_effector_angle=end_effector_tag[2]
 
         global_end_effector_x,global_end_effector_y,end_effector_depth=convert_pixel_color(end_effector_x,end_effector_y,end_effector_tag[3])
-        return (global_end_effector_x,global_end_effector_y,end_effector_depth,end_effector_angle)
+        return (global_end_effector_x,global_end_effector_y,depth,end_effector_angle)
     elif calibrate:
         end_effector_tag=april_tag_info(end_effector_id)
         return end_effector_tag
