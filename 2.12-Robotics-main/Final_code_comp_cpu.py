@@ -32,6 +32,10 @@ image=cv2.imread("kyle_color_1.png")
 depth_image=cv2.imread("kyle_depth_1.png")
 image=1
 depth_image=1
+end_effector_id=10
+table_id=9
+table_tag=0
+end_effector_tag=0
 
 
 def convertToOpenCVHSV(H,S,V):
@@ -210,9 +214,11 @@ def april_tag_info(id):
     Args:
         id (int): id of april tag whose information you would like
     Returns:
-        info (tuple): (centerx,centery,angle) center x, y are floats
+        info (tuple): (centerx,centery,angle,median_depth) center x, y are floats
     """
     global image
+    global end_effector_id
+
     img=cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
     result=detector.detect(img)
     for index in range(len(result)):
@@ -220,15 +226,33 @@ def april_tag_info(id):
             center_loc=result[index].center
             center_x=center_loc[0]
             center_y=center_loc[1]
+
+            corners=result[index].corners
+
             top_right_loc=result[index].corners[1]
             top_right_x=top_right_loc[0]
             top_right_y=top_right_loc[1]
-            angle=math.atan2(center_y-top_right_y,top_right_x-center_x)
 
-            return (center_x,center_y,angle)
+            top_left_loc=result[index].corners[0]
+            top_left_x=top_left_loc[0]
+            top_left_y=top_left_loc[1]
+
+            width=corners[1][0]-corners[0][0]
+            height=corners[2][1]-corners[1][1]
+            small_square_depth=depth_image[int(center_y-height/8):int(center_y+height/8), int(center_x-width/8):int(center_x+width/8)]
+            sorted_small_square_depth=np.sort(small_square_depth)
+            median_depth=np.median(sorted_small_square_depth)
+            angle=math.atan2(top_left_y-top_right_y,top_right_x-top_left_x)
+
+
+            cv2.line(image,(int(top_left_x),int(top_left_y)),(int(top_right_x),int(top_right_y)),(255,0,0),3)
+            cv2.imshow('april_detect',image)
+            cv2.waitKey(0)
+
+            return (center_x,center_y,angle,median_depth)
 
 brick_height=82.5
-table_to_camera=1028
+table_to_camera=1049
 safety_net=12
 
 levels=[[table_to_camera+15,table_to_camera-brick_height-safety_net],[table_to_camera-brick_height-safety_net,table_to_camera-2*brick_height-safety_net],[table_to_camera-2*brick_height-safety_net,table_to_camera-3*brick_height-safety_net],[table_to_camera-3*brick_height-safety_net,table_to_camera-4*brick_height-safety_net]] #ranges of depths for brick to be expected
@@ -267,26 +291,34 @@ def find_brick_height_from_average_depth(depth):
         return 1
     return False
 
+
+
 def create_depth_mask(depth_range):
     lower_depth=depth_range[0]
     upper_depth=depth_range[1]
-    depth_img=np.where(depth_image>lower_depth and depth_image<upper_depth,255,0)
+    depth_img=np.where((depth_image>lower_depth) & (depth_image<upper_depth),255,0)
     depth_img=depth_img.astype('uint8')
     
     image_at_depth=cv2.bitwise_and(image,image,mask=depth_img)
     return image_at_depth
 #brick level in increasing height list of lists [min,max]
-brick_levels=[[0,746],[747,822],[849,918],[919,1000]] 
+# brick_levels=[[0,746],[747,822],[849,918],[919,1000]]
+brick_levels=[[0,746],[747,822],[825,960],[965,1000]]  
 
 def find_brick_center():
     global image
     global depth_image
+    global table_id
+    global table_tag
+    global end_effector_tag
 
-    end_effector_tag=april_tag_info(end_effector_id)
-
-    # image=image[:,end_effector_tag[0]:]
-    end_effector_offset=3  #offset to cut off to the left of april tag
-    image[:,0:int(end_effector_tag[0])-end_effector_offset]=(0,0,0)
+    table_tag=april_tag_info(table_id)
+    if table_tag:
+        # image=image[:,end_effector_tag[0]:]
+        end_effector_offset=3  #offset to cut off to the left of april tag
+        image[:,0:int(table_tag[0])-table_offset]=(0,0,0)
+    else:
+        print('did not find table tag')
 
     print('starting main')
     # image=cv2.imread("kyle_color_1.png")
@@ -303,11 +335,15 @@ def find_brick_center():
     brick_names=[]
     brick_offset=[]
 
+    final_bricks=[] #list containing all bricks x,y center location and angle in radians
+
     for dp in range(len(brick_levels)):
         depth_range=brick_levels[dp]
         brick_stack=4-dp
 
         image_at_depth=create_depth_mask(depth_range)
+        cv2.imshow('depth'+str(brick_stack),image_at_depth)
+        cv2.waitKey(0)
 
         for color in color_search_order:
             #find bricks (organized by depth)
@@ -353,7 +389,7 @@ def find_brick_center():
             grouped_brick_images=[]
             grouped_brick_names=[]
 
-            final_bricks=[] #list containing all bricks x,y center location and angle in radians
+            
 
             grab_image=image.copy()
             low_area, up_area, padding = paramaters[14:17]
@@ -541,42 +577,76 @@ def find_brick_center():
             end_effector_x=end_effector_tag[0]
             end_effector_y=end_effector_tag[1]
             end_effector_angle=end_effector_tag[2]
+
+            global_end_effector_x,global_end_effector_y,end_effector_depth=convert_pixel_color(end_effector_x,end_effector_y,end_effector_tag[3])
             for index in range(len(brick_centers)):
                 brick_center_x=brick_centers[index][0]
                 brick_center_y=brick_centers[index][1]
                 brick_angle=brick_angles[index]
                 brick_image=brick_images[index]
 
-                brick_image=cv2.circle(brick_image,(brick_center_x,brick_center_y),2,(0,0,255),3)
+                cv2.circle(image,(brick_center_x,brick_center_y),2,(0,0,255),3)
+                cv2.line(image,(brick_center_x,brick_center_y),(int(brick_center_x+30*math.cos(brick_angle)),int(brick_center_y-30*math.sin(brick_angle))),[0,255,0],2)
+
+
 
                 brick_level=brick_stack #what number of bricks high is it
-                brick_center_x, brick_center_y,depth=convert_pixel_color(brick_center_x,brick_center_y,depth)
 
 
-                final_bricks.append((brick_center_x- end_effector_x,brick_center_y- end_effector_y,brick_level,brick_angle-end_effector_angle,brick_image))
+                brick_center_x, brick_center_y,depth=convert_pixel_color(brick_center_x,brick_center_y,table_to_camera-(brick_level*82.5))
+                print((brick_angle)*180/np.pi)
+                print((end_effector_angle)*180/np.pi)
+                print('here',(brick_angle-end_effector_angle)*180/np.pi)
+                final_bricks.append((brick_center_x - global_end_effector_x,brick_center_y - global_end_effector_y , brick_level ,brick_angle-end_effector_angle,brick_image))
+                
             return final_bricks
 
     return "failed"
 
-if __name__=='__main__':
-    # rospy.init_node('tester',anonymous=True)
-    # end_effector_id=10
-    end_effector_id=9
+def main(end_effect_tag,calibrate,first):
+    global end_effector_tag
+
     listener()
     sleep(1)
-    cv2.imshow('im',image)
-    cv2.imshow('depth',depth_image)
-    final_bricks=find_brick_center()
+
+    if calibrate and first:
+        end_effector_tag=april_tag_info(end_effector_id)
+        end_effector_x=end_effector_tag[0]
+        end_effector_y=end_effector_tag[1]
+        end_effector_angle=end_effector_tag[2]
+
+        global_end_effector_x,global_end_effector_y,end_effector_depth=convert_pixel_color(end_effector_x,end_effector_y,end_effector_tag[3])
+        return (global_end_effector_x,global_end_effector_y,depth,end_effector_angle)
+    elif calibrate:
+        end_effector_tag=april_tag_info(end_effector_id)
+        return end_effector_tag
+    # end_effector_id=10
     
-    if isinstance(final_bricks,list):
-        destination=final_bricks[0][0:4]
+    else:
 
-    print(final_bricks)
+        end_effector_tag=end_effect_tag
 
-    for brk in final_bricks:
-        cv2.imshow(str(brk[2])+'  '+str(brk[0]),brk[4])
+        
+        
+        cv2.imshow('depth',depth_image)
+        final_bricks=find_brick_center()
+        
+        
+        if isinstance(final_bricks,list):
+            destination=final_bricks[0][0:4]
+        
+        for brk in final_bricks:
+            cv2.imshow(str(brk[2])+'  '+str(brk[0]),brk[4])
+        print(destination)
+        cv2.imshow('im',image)
+        cv2.waitKey(0)
+        return destination
 
-    cv2.waitKey(0)
+if __name__=='__main__':
+    # rospy.init_node('tester',anonymous=True)
+    print(main((0,0,0,0),False))
+
+    
 
     # if destination:
     #     print(destination)

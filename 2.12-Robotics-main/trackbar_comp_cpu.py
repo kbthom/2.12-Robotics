@@ -83,13 +83,18 @@ def create_close_trackbars():
     cv2.createTrackbar("shape", "trackbars2", 1, 2, callback)
 
 def create_depth_trackbars():
-    cv2.createTrackbar("depth_lower", "trackbars2", 0, 30000, callback)
-    cv2.createTrackbar("depth_upper", "trackbars2", 30000, 30000, callback)
+    cv2.createTrackbar("depth_lower", "trackbars2", 0, 1500, callback)
+    cv2.createTrackbar("depth_upper", "trackbars2", 1500, 1500, callback)
+
+def create_depth_erode_dilate():
+    cv2.createTrackbar('depth_erode',"trackbars2", 0, 15, callback)
+    cv2.createTrackbar('depth_dilate',"trackbars2", 0, 15, callback)
+
 
 def get_trackbar_values(operation):
     values=[]
     for i in track_vals[operation]:
-        v=cv2.getTrackbarPos(i,"trackbars1")
+        v=cv2.getTrackbarPos(i,"trackbars")
         values.append(v)
     return values
 
@@ -148,7 +153,8 @@ line_track_names=["min_intersections"]
 hough_circ_track_names=["arg1 (higher canny thresh)","arg2 (accumulator thresh)","min_distance","dp*100","Min Radius", "Max Radius"]
 depth_track_names=["depth_lower","depth_upper"]
 close_track_names=["close_size(dilate)","close_size(erode)","shape"]
-track_vals={"HSV":HSV_track_names, "E/D":Erode_Dilate_track_names, "Canny":Canny_track_names,'Area':Area_track_names, "Hough Circle":hough_circ_track_names,"lines":line_track_names,'close':close_track_names,'depth':depth_track_names}
+depth_erode_dilate_track_names=['depth_erode','depth_dilate']
+track_vals={"HSV":HSV_track_names, "E/D":Erode_Dilate_track_names, "Canny":Canny_track_names,'Area':Area_track_names, "Hough Circle":hough_circ_track_names,"lines":line_track_names,'close':close_track_names,'depth':depth_track_names,'depth_erode/dilate':depth_erode_dilate_track_names}
 
     
 colors={'b':[102,129,101,129,255,255],'r':[162,168,75,255,255,255],'g':[80,168,75,92,255,255],'y':[22,86,70,41,255,255]}
@@ -162,6 +168,8 @@ def create_trackbars():
     create_line_trackbars()
     create_close_trackbars()
     create_depth_trackbars()
+    create_depth_erode_dilate()
+
 
 ########################################################################
 #####-----------Pixel Coordinaate Transfom-----------###################
@@ -256,12 +264,12 @@ cv2.namedWindow("mask", cv2.WINDOW_AUTOSIZE)
 cv2.namedWindow("erode", cv2.WINDOW_AUTOSIZE)
 cv2.namedWindow("object detect", cv2.WINDOW_AUTOSIZE)
 
-cv2.namedWindow("trackbars1", 0)
-cv2.namedWindow("trackbars2", 0)
+cv2.namedWindow("trackbars", 0)
+cv2.namedWindow("trackbars2", 1)
 
 
 create_trackbars()
-cv2.moveWindow("trackbars1",0,0)
+cv2.moveWindow("trackbars",0,0)
 cv2.moveWindow("trackbars2",10,10)
 
 canny=False
@@ -285,22 +293,40 @@ while True:
     # image=cv2.imread(imagelink)
     # # "frame000000.png"
     # depth_image=cv2.imread("kyle_depth_1.png")
+#____________depth filter________________________________________
     lower_depth,upper_depth=get_trackbar_values2('depth')
-    depth_img=np.where(depth_image>lower_depth and depth_image<upper_depth,255,0)
+    depth_img=np.where((depth_image>lower_depth) & (depth_image<upper_depth),255,0)
     depth_img=depth_img.astype('uint8')
     
-    image_at_depth=cv2.bitwise_and(image,image,mask=depth_img)
-    cv2.imshow('depth_masked',image_at_depth)
-    image=image_at_depth
+
     x_halfway=585
     # image=image[:,x_halfway:,:]
     # image=cv2.flip(image, 2) #flip across yaxis
     # image=cv2.flip(image, 0)  #flip across x-axis
     rect_bound=image.copy()
     height,width=image.shape[0:2]
-    # hough_line_img=np.zeros((height,width,1), np.uint8)
-    
-    # blur=cv2.GaussianBlur(image, [11,11],0)
+
+#__________________denoise after depth______________________#
+
+    depth_erode_size, depth_dilate_size = get_trackbar_values2('depth_erode/dilate')
+    depth_erode_size=max(1,depth_erode_size)
+    depth_dilate_size=max(1,depth_dilate_size)
+
+
+    shape=MORPH_RECT #change kernel shape MORPH_    RECT or CROSS or ELLIPSE
+    # shape=MORPH_CROSS
+    # shape=MORPH_ELLIPSE
+
+    erod_kernel=cv2.getStructuringElement(shape,(depth_erode_size,depth_erode_size))
+    mask_erode =cv2.erode(depth_img, erod_kernel, iterations=1)
+
+    dilate_kernel=cv2.getStructuringElement(shape,(depth_dilate_size,depth_dilate_size))
+    depth_img_dilate= cv2.dilate(mask_erode, dilate_kernel, iterations=1)
+#______________-bitwise______________#
+    image_at_depth=cv2.bitwise_and(image,image,mask=depth_img_dilate)
+    cv2.imshow('depth_masked',image_at_depth)
+    image=image_at_depth
+
 
 #_________-_________HSV Converstion and HSV removal Mask__________-#
     pre_mask=cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
