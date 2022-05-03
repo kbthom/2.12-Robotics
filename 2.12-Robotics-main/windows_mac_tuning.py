@@ -24,8 +24,8 @@ from time import sleep
 
 # cv_bridge=CvBridge()
 
-color='yellow_'
-number=5
+color='greenandyellow_'
+number=2
 
 image_path='color_image_'+color+str(number)+'.png'
 depth_path='depth_image_'+color+str(number)+'.npy'
@@ -385,7 +385,7 @@ while True:
         low_area, up_area, padding = get_trackbar_values("Area")
 
         #testing just depth
-        contours=cv2.findContours(depth_img_dilate.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
+        contours=cv2.findContours(mask_dilate.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
 
         #HSV
         # contours=cv2.findContours(mask_dilate.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
@@ -478,52 +478,53 @@ while True:
             x_offset,y_offset=grouped_brick_offset[i]
             cannyblob = cv2.Canny(cv2.equalizeHist(grouped_brick_images[i]),lower_threshold,upper_threshold,apertureSize = aper)
 
+            if cannyblob:
 
-            contours=cv2.findContours(cannyblob.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
-            # contours=contours[0]
-            contours=imutils.grab_contours(contours)
-            # cv2.drawContours(rect_bound, contours, -1, (255,0,0), 2)
-            for contr in contours:
-                M=cv2.moments(contr)
-                if M['m00']!=0:
-                    cx=int(M['m10']/M['m00'])
-                    cy=int(M['m01']/M['m00'])
-                area=cv2.contourArea(contr)
-                perimeter= cv2.arcLength(contr,True)
-                rect = cv2.minAreaRect(contr)
-                box = cv2.boxPoints(rect)
-                box = np.int0(box)
-
-
-
-                if area>low_area and area<up_area:
-                    # cv2.drawContours(rect_bound,[box],0,(0,0,255),2)
+                contours=cv2.findContours(cannyblob.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
+                # contours=contours[0]
+                contours=imutils.grab_contours(contours)
+                # cv2.drawContours(rect_bound, contours, -1, (255,0,0), 2)
+                for contr in contours:
                     M=cv2.moments(contr)
-                    cx=int(M['m10']/M['m00'])
-                    cy=int(M['m01']/M['m00'])
-                    #############draw line orientation
-                    angle=180-rect[2]
-                    orient=angle-90
-                    if rect[1][0]>rect[1][1]:
-                        orient=angle
-                    print(orient)
-                    theta=orient*np.pi/180
-                    length=50
-                    p1x=int(round(cx+length*math.cos(theta)))+x_offset
-                    p1y=int(round(cy-length*math.sin(theta)))+y_offset
-                    cv2.line(rect_bound,(cx+x_offset,cy+y_offset),(p1x,p1y),[255,192,203],3)
+                    if M['m00']!=0:
+                        cx=int(M['m10']/M['m00'])
+                        cy=int(M['m01']/M['m00'])
+                    area=cv2.contourArea(contr)
+                    perimeter= cv2.arcLength(contr,True)
+                    rect = cv2.minAreaRect(contr)
+                    box = cv2.boxPoints(rect)
+                    box = np.int0(box)
 
-                    cv2.circle(rect_bound,(cx+x_offset,cy+y_offset),2,(0,0,255),3)
 
-                    ####___--if cx and cy in certatin regime add them
-                    bricks.append(contr+[x_offset,y_offset])
-                    x,y,w,h = cv2.boundingRect(contr)
-                    brick_local_centers.append((cx-x+padding+x_offset,cy-y+padding+y_offset))
-                    cv2.rectangle(rect_bound,(x-padding+x_offset,y-padding+y_offset),(x+w+padding+x_offset,y+h+padding+y_offset),(0,255,0),2)
-                    brick_image_current=grab_image[y-padding+y_offset:y+h+padding+y_offset,x-padding+x_offset:x+w+padding+x_offset]
-                    brick_offset.append((x-padding+x_offset,y-padding+y_offset))
-                    brick_images.append(brick_image_current)
-                    brick_names.append("brick_"+str((cx+x_offset,cy+y_offset)))
+
+                    if area>low_area and area<up_area:
+                        # cv2.drawContours(rect_bound,[box],0,(0,0,255),2)
+                        M=cv2.moments(contr)
+                        cx=int(M['m10']/M['m00'])
+                        cy=int(M['m01']/M['m00'])
+                        #############draw line orientation
+                        angle=180-rect[2]
+                        orient=angle-90
+                        if rect[1][0]>rect[1][1]:
+                            orient=angle
+                        print(orient)
+                        theta=orient*np.pi/180
+                        length=50
+                        p1x=int(round(cx+length*math.cos(theta)))+x_offset
+                        p1y=int(round(cy-length*math.sin(theta)))+y_offset
+                        cv2.line(rect_bound,(cx+x_offset,cy+y_offset),(p1x,p1y),[255,192,203],3)
+
+                        cv2.circle(rect_bound,(cx+x_offset,cy+y_offset),2,(0,0,255),3)
+
+                        ####___--if cx and cy in certatin regime add them
+                        bricks.append(contr+[x_offset,y_offset])
+                        x,y,w,h = cv2.boundingRect(contr)
+                        brick_local_centers.append((cx-x+padding+x_offset,cy-y+padding+y_offset))
+                        cv2.rectangle(rect_bound,(x-padding+x_offset,y-padding+y_offset),(x+w+padding+x_offset,y+h+padding+y_offset),(0,255,0),2)
+                        brick_image_current=grab_image[y-padding+y_offset:y+h+padding+y_offset,x-padding+x_offset:x+w+padding+x_offset]
+                        brick_offset.append((x-padding+x_offset,y-padding+y_offset))
+                        brick_images.append(brick_image_current)
+                        brick_names.append("brick_"+str((cx+x_offset,cy+y_offset)))
         
         # list_intensities=[]
         # empty_img=np.zeros_like(rect_bound[:,:,0])

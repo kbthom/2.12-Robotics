@@ -28,10 +28,10 @@ cv_bridge=CvBridge()
 
 color='blue'
 
-image=cv2.imread("kyle_color_1.png")
-depth_image=cv2.imread("kyle_depth_1.png")
-image=1
-depth_image=1
+image=cv2.imread("color_image_all_4.png")
+depth_image=cv2.imread("depth_image_all_4.npy")
+# image=1
+# depth_image=1
 end_effector_id=10
 table_id=9
 table_tag=0
@@ -156,21 +156,13 @@ def get_paramaters(color,dp):
 
 
     """
-    yellow=[22,105,192,41,255,255,
-            6,1,10,1,MORPH_ELLIPSE,
-            30,48,1,
-            8372,23993,2,
-            201,127,3,
-            124,28,10,100,16,50]
-    blue=[102,129,101,129,255,255,
-            6,1,10,1,MORPH_ELLIPSE,
-            30,48,1,
-            8372,29070,2,
-            201,127,3,
-            124,28,10,100,16,50]
+    yellow=[15, 47, 184, 68, 255, 255, 6, 1, 10, 1, MORPH_ELLIPSE, 30, 38, 0, 15500, 31953, 2, 201, 127, 3, 124, 28, 10, 100, 16, 50]
+    blue=[99, 150, 89, 137, 255, 255, 6, 1, 10, 1, MORPH_ELLIPSE, 28, 30, 0, 15500, 27219, 2, 201, 127, 3, 165, 28, 10, 100, 16, 50]
+    green=[84, 172, 75, 96, 255, 255, 6, 1, 10, 1, MORPH_ELLIPSE, 18, 16, 0, 15500, 28000, 2, 201, 127, 3, 124, 28, 10, 100, 16, 50]
+    red=[127, 59, 105, 179, 255, 255, 6, 1, 10, 1, MORPH_ELLIPSE, 33, 31, 0, 15500, 27811, 2, 201, 127, 3, 124, 28, 10, 100, 16, 50]
 
-    color_vals={'blue':blue,'green':[],'yellow':yellow,'red':[]}
-    depth_vals=[[0,771,30,34],[773,876,30,37],[847,947,19,27],[957,1015,19,32]]
+    color_vals={'blue':blue,'green':green,'yellow':yellow,'red':red}
+    depth_vals=[[0,771,30,34,25000,38000],[755,876,30,35,16000,32000],[847,947,19,27,8200,30000],[957,1019,19,32,8000,30000]]
     return color_vals[color]+depth_vals[dp]
 
 def depth_image_func(msg):
@@ -374,7 +366,7 @@ def find_brick_center():
             mask_dilate= cv2.dilate(mask_erode, dilate_kernel, iterations=iter_dilate)
         
     #_____________________Close Holes_____________####
-            close_size1,close_size2,shape_num=paramaters[28:]+[1]
+            close_size1,close_size2,shape_num=paramaters[28:30]+[1]
 
             kernel_close1=cv2.getStructuringElement(shape,(close_size1,close_size1))
             kernel_close2=cv2.getStructuringElement(shape,(close_size2,close_size2))
@@ -402,6 +394,7 @@ def find_brick_center():
 
             grab_image=image.copy()
             low_area, up_area, padding = paramaters[14:17]
+            low_area, up_area=paramaters[30:]
 
             # ##__Grabs contours of HSV removal mask after noise was removed##
             # im3,contours,hierarchy=cv2.findContours(mask_dilate.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
