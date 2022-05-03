@@ -14,6 +14,7 @@ import rospy
 from sensor_msgs.msg import Image, CameraInfo
 from visualization_msgs.msg import Marker
 from std_msgs.msg import ColorRGBA
+from time import sleep
 
 
 from cv_bridge import CvBridge, CvBridgeError
@@ -274,6 +275,9 @@ print('top_left',convert_pixel_color(137,231,104.14))
 print('top_right',convert_pixel_color(219,230,104.14))
 print('width',convert_pixel_color(401,412,104.14)[0]-convert_pixel_color(310,411,104.14)[0])
 
+listener()
+sleep(1)
+
 while True:
     # imagelink="bag_images/rgb/frame000000.png"
     # imagelink="kyle_color_1.png"
@@ -298,7 +302,7 @@ while True:
     pre_mask=cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     H_min, S_min, V_min, H_max, S_max, V_max= get_trackbar_values("HSV")
     mask=cv2.inRange(pre_mask, (H_min, S_min, V_min), (H_max, S_max, V_max))
-    blurred=cv2.GaussianBlur(image, [11,11],0)
+    blurred=cv2.GaussianBlur(image, (11,11),0)
     pre_depth_mask=cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
     depth_mask=cv2.inRange(pre_depth_mask, (0, S_min+40, V_min), (255, S_max, V_max))
     
@@ -344,8 +348,8 @@ while True:
     if trace:
         low_area, up_area, padding = get_trackbar_values("Area")
         contours=cv2.findContours(mask_dilate.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
-        # contours=imutils.grab_contours(contours)
-        contours=contours[0]
+        contours=imutils.grab_contours(contours)
+        # contours=contours[0]
         cv2.drawContours(rect_bound, contours, -1, (255,0,0), 3)
         bricks=[]
         brick_centers=[]
@@ -388,8 +392,8 @@ while True:
                     orient=angle
                 theta=orient*np.pi/180
                 length=50
-                p1x=round(cx+length*math.cos(theta))
-                p1y=round(cy-length*math.sin(theta))
+                p1x=int(round(cx+length*math.cos(theta)))
+                p1y=int(round(cy-length*math.sin(theta)))
                 cv2.line(rect_bound,(cx,cy),(p1x,p1y),[255,192,203],2)
 
                 cv2.circle(rect_bound,(cx,cy),2,(0,0,255),3)
@@ -434,8 +438,8 @@ while True:
 
 
             contours=cv2.findContours(cannyblob.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
-            contours=contours[0]
-            # contours=imutils.grab_contours(contours)
+            # contours=contours[0]
+            contours=imutils.grab_contours(contours)
             # cv2.drawContours(rect_bound, contours, -1, (255,0,0), 2)
             for contr in contours:
                 M=cv2.moments(contr)
@@ -463,8 +467,8 @@ while True:
                     print(orient)
                     theta=orient*np.pi/180
                     length=50
-                    p1x=round(cx+length*math.cos(theta))+x_offset
-                    p1y=round(cy-length*math.sin(theta))+y_offset
+                    p1x=int(round(cx+length*math.cos(theta)))+x_offset
+                    p1y=int(round(cy-length*math.sin(theta)))+y_offset
                     cv2.line(rect_bound,(cx+x_offset,cy+y_offset),(p1x,p1y),[255,192,203],3)
 
                     cv2.circle(rect_bound,(cx+x_offset,cy+y_offset),2,(0,0,255),3)

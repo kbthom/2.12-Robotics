@@ -508,7 +508,7 @@ def find_brick_center():
         brick_angle=brick_angles[index]
         brick_image=brick_images[index]
 
-        cv2.circle(brick_image,(brick_center_x,brick_center_y),2,(0,0,255),3)
+        brick_image=cv2.circle(brick_image,(brick_center_x,brick_center_y),2,(0,0,255),3)
         depth=sorted_depth_averages[index]
         brick_z=find_z_from_average_depth(depth)
         sorted_brick_images.append(brick_image)
@@ -528,6 +528,8 @@ if __name__=='__main__':
     end_effector_id=9
     listener()
     sleep(1)
+    cv2.imshow('im',image)
+    cv2.imshow('depth',depth_image)
     final_bricks=find_brick_center()
     
     destination=False
@@ -542,6 +544,8 @@ if __name__=='__main__':
 
 
     end_effector_tag=april_tag_info(end_effector_id)
+
+    print(final_bricks)
 
     for brk in final_bricks:
         cv2.imshow(str(brk[2])+'  '+str(brk[0]),brk[4])
