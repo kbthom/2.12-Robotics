@@ -341,9 +341,11 @@ def find_brick_center():
     brick_offset=[]
 
     final_bricks=[] #list containing all bricks x,y center location and angle in radians
-
+    color='blue'
     for dp in range(len(brick_levels)):
         paramaters=get_paramaters(color,dp)
+        print(paramaters)
+        print(len(paramaters))
         depth_lower,depth_upper=paramaters[26:28]
         brick_stack=4-dp
 
@@ -353,6 +355,7 @@ def find_brick_center():
 
         for color in color_search_order:
             #find bricks (organized by depth)
+            paramaters=get_paramaters(color,dp)
 
             
 
@@ -371,7 +374,7 @@ def find_brick_center():
             mask_dilate= cv2.dilate(mask_erode, dilate_kernel, iterations=iter_dilate)
         
     #_____________________Close Holes_____________####
-            close_size1,close_size2,shape_num=paramaters[28:]
+            close_size1,close_size2,shape_num=paramaters[28:]+[1]
 
             kernel_close1=cv2.getStructuringElement(shape,(close_size1,close_size1))
             kernel_close2=cv2.getStructuringElement(shape,(close_size2,close_size2))
@@ -648,6 +651,7 @@ def main(end_effect_tag,calibrate,first):
             zipped_list_x1=zip(final_brick_x,final_brick_indices)
             zipped_list_x2=zip(final_brick_x,final_brick_y)
             sorted_zipped_list_x1=sorted(zipped_list_x1)
+            sorted_zipped_list_x2=sorted(zipped_list_x2)
             x_sorted_index=[element for _,element in sorted_zipped_list_x1]
             x_sorted_y=[element for _,element in sorted_zipped_list_x2]
             zipped_list_index_y=zip(x_sorted_y,x_sorted_index)
@@ -656,7 +660,8 @@ def main(end_effect_tag,calibrate,first):
             y_x_sorted_index=[element for _,element in sorted_zipped_list_x2]
 
             destination=final_bricks[y_x_sorted_index[0]][0:4]
-        
+
+            cv2.imshow('brick wanted',final_bricks[y_x_sorted_index[0]][4])
         for brk in final_bricks:
             cv2.imshow(str(brk[2])+'  '+str(brk[0]),brk[4])
         print(destination)
