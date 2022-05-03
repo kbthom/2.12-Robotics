@@ -141,7 +141,7 @@ def get_pixel_depth(x,y,data):
 color_search_order=['blue','green','red','yellow']
 color_search_order=['yellow','blue']
 
-def get_paramaters(color):
+def get_paramaters(color,dp):
     """
     Grab Parameters for color
     
@@ -152,6 +152,9 @@ def get_paramaters(color):
     low_area, up_area, padding,
     lower_threshold, upper_threshold, aper,
     arg1, arg2, min_distance, dp_100,min_rad, max_rad,
+    lower_depth, upper_depth,close_size1,close_size2
+
+
     """
     yellow=[22,105,192,41,255,255,
             6,1,10,1,MORPH_ELLIPSE,
@@ -167,7 +170,8 @@ def get_paramaters(color):
             124,28,10,100,16,50]
 
     color_vals={'blue':blue,'green':[],'yellow':yellow,'red':[]}
-    return color_vals[color]
+    depth_vals=[[0,771,30,34],[773,876,30,37],[847,947,19,27],[957,1015,19,32]]
+    return color_vals[color]+depth_vals[dp]
 
 def depth_image_func(msg):
      global depth_image
@@ -339,17 +343,18 @@ def find_brick_center():
     final_bricks=[] #list containing all bricks x,y center location and angle in radians
 
     for dp in range(len(brick_levels)):
-        depth_range=brick_levels[dp]
+        paramaters=get_paramaters(color,dp)
+        depth_lower,depth_upper=paramaters[26:28]
         brick_stack=4-dp
 
-        image_at_depth=create_depth_mask(depth_range)
+        image_at_depth=create_depth_mask([depth_lower,depth_upper])
         cv2.imshow('depth'+str(brick_stack),image_at_depth)
         cv2.waitKey(0)
 
         for color in color_search_order:
             #find bricks (organized by depth)
 
-            paramaters=get_paramaters(color)
+            
 
     #___________________HSV Converstion and HSV removal Mask__________-#        
             H_min, S_min, V_min, H_max, S_max, V_max=paramaters[0:6]
@@ -366,7 +371,7 @@ def find_brick_center():
             mask_dilate= cv2.dilate(mask_erode, dilate_kernel, iterations=iter_dilate)
         
     #_____________________Close Holes_____________####
-            close_size1,close_size2,shape_num=paramaters[11:14]
+            close_size1,close_size2,shape_num=paramaters[28:]
 
             kernel_close1=cv2.getStructuringElement(shape,(close_size1,close_size1))
             kernel_close2=cv2.getStructuringElement(shape,(close_size2,close_size2))
@@ -632,9 +637,25 @@ def main(end_effect_tag,calibrate,first):
         cv2.imshow('depth',depth_image)
         final_bricks=find_brick_center()
         
-        
+        final_brick_indices=[]
+        final_brick_x=[]
+        final_brick_y=[]
         if isinstance(final_bricks,list):
-            destination=final_bricks[0][0:4]
+            for index in range(len(final_bricks)):
+                final_brick_indices.append(index)
+                final_brick_x.append((final_bricks[index][0]-end_effector_tag[0])**2)
+                final_brick_y.append((final_bricks[index][1]-end_effector_tag[1])**2)
+            zipped_list_x1=zip(final_brick_x,final_brick_indices)
+            zipped_list_x2=zip(final_brick_x,final_brick_y)
+            sorted_zipped_list_x1=sorted(zipped_list_x1)
+            x_sorted_index=[element for _,element in sorted_zipped_list_x1]
+            x_sorted_y=[element for _,element in sorted_zipped_list_x2]
+            zipped_list_index_y=zip(x_sorted_y,x_sorted_index)
+            sorted_zipped_list_x2=sorted(zipped_list_index_y)
+
+            y_x_sorted_index=[element for _,element in sorted_zipped_list_x2]
+
+            destination=final_bricks[y_x_sorted_index[0]][0:4]
         
         for brk in final_bricks:
             cv2.imshow(str(brk[2])+'  '+str(brk[0]),brk[4])

@@ -10,24 +10,28 @@ import numpy as np
 import imutils
 # from scipy import signal
 
-import rospy
-from sensor_msgs.msg import Image, CameraInfo
-from visualization_msgs.msg import Marker
-from std_msgs.msg import ColorRGBA
+# import rospy
+# from sensor_msgs.msg import Image, CameraInfo
+# from visualization_msgs.msg import Marker
+# from std_msgs.msg import ColorRGBA
 from time import sleep
 
 
-from cv_bridge import CvBridge, CvBridgeError
-import message_filters
+# from cv_bridge import CvBridge, CvBridgeError
+# import message_filters
 
-import apriltag
+# import apriltag
 
-cv_bridge=CvBridge()
+# cv_bridge=CvBridge()
 
-image=1
-depth_image=1
+color='yellow_'
+number=5
 
-color='blue'
+image_path='color_image_'+color+str(number)+'.png'
+depth_path='depth_image_'+color+str(number)+'.npy'
+image_orig=cv2.imread(image_path)
+depth_image=np.load(depth_path,allow_pickle=True,fix_imports=True)
+
 
 def convertToOpenCVHSV(H,S,V):
     return np.array([H//2, S*2.55, V*2.55])
@@ -84,11 +88,11 @@ def create_close_trackbars():
 
 def create_depth_trackbars():
     cv2.createTrackbar("depth_lower", "trackbars2", 0, 1500, callback)
-    cv2.createTrackbar("depth_upper", "trackbars2", 1500, 1500, callback)
+    cv2.createTrackbar("depth_upper", "trackbars2", 765, 1500, callback)
 
 def create_depth_erode_dilate():
-    cv2.createTrackbar('depth_erode',"trackbars2", 0, 15, callback)
-    cv2.createTrackbar('depth_dilate',"trackbars2", 0, 15, callback)
+    cv2.createTrackbar('depth_erode',"trackbars2", 45, 15, callback)
+    cv2.createTrackbar('depth_dilate',"trackbars2", 38, 15, callback)
 
 
 def get_trackbar_values(operation):
@@ -105,44 +109,44 @@ def get_trackbar_values2(operation):
         values.append(v)
     return values
 
-def depth_image_func(msg):
-     global depth_image
-     try:
-        # im = np.frombuffer(image_data.data, dtype=np.uint8).reshape(image_data.height, image_data.width, -1)
-        cv_image = cv_bridge.imgmsg_to_cv2(msg, desired_encoding = "passthrough")
-        depth_array = np.array(cv_image,dtype=np.float32)
+# def depth_image_func(msg):
+#      global depth_image
+#      try:
+#         # im = np.frombuffer(image_data.data, dtype=np.uint8).reshape(image_data.height, image_data.width, -1)
+#         cv_image = cv_bridge.imgmsg_to_cv2(msg, desired_encoding = "passthrough")
+#         depth_array = np.array(cv_image,dtype=np.float32)
 
-        # depth_image=im
+#         # depth_image=im
 
-        depth_image=depth_array
+#         depth_image=depth_array
 
-     except CvBridgeError as e:
-        print(e)
-     return depth_image
+#      except CvBridgeError as e:
+#         print(e)
+#      return depth_image
 
 
 
-def listener():
-    rospy.init_node('listener', anonymous=True)
-    #rospy.Subscriber("node path",file_type (data i.e. input to function),function_to_run)
+# def listener():
+#     rospy.init_node('listener', anonymous=True)
+#     #rospy.Subscriber("node path",file_type (data i.e. input to function),function_to_run)
     
-    rospy.Subscriber('/cam_1/color/image_raw',Image,color_image_func)
-    rospy.Subscriber("/cam_1/aligned_depth_to_color/image_raw",Image,depth_image_func)
-    print('listened')
+#     rospy.Subscriber('/cam_1/color/image_raw',Image,color_image_func)
+#     rospy.Subscriber("/cam_1/aligned_depth_to_color/image_raw",Image,depth_image_func)
+#     print('listened')
 
-def color_image_func(msg_color):
-    global image
-    try:
+# def color_image_func(msg_color):
+#     global image
+#     try:
 
-        # im = np.frombuffer(image_data.data, dtype=np.uint8).reshape(image_data.height, image_data.width, -1)
-        cv_image = cv_bridge.imgmsg_to_cv2(msg_color, "bgr8")
-        image=cv_image
-        # image=im
+#         # im = np.frombuffer(image_data.data, dtype=np.uint8).reshape(image_data.height, image_data.width, -1)
+#         cv_image = cv_bridge.imgmsg_to_cv2(msg_color, "bgr8")
+#         image=cv_image
+#         # image=im
 
         
-    except CvBridgeError as e:
-        print(e)
-    return image
+#     except CvBridgeError as e:
+#         print(e)
+#     return image
 
 
 HSV_track_names= ["H_MIN","S_MIN","V_MIN","H_MAX","S_MAX","V_MAX"]
@@ -284,8 +288,8 @@ print('top_left',convert_pixel_color(137,231,104.14))
 print('top_right',convert_pixel_color(219,230,104.14))
 print('width',convert_pixel_color(401,412,104.14)[0]-convert_pixel_color(310,411,104.14)[0])
 
-listener()
-sleep(1)
+# listener()
+# sleep(1)
 
 while True:
     # imagelink="bag_images/rgb/frame000000.png"
@@ -296,15 +300,15 @@ while True:
 #____________depth filter________________________________________
     lower_depth,upper_depth=get_trackbar_values2('depth')
     depth_img=np.where((depth_image>lower_depth) & (depth_image<upper_depth),255,0)
-    depth_img=depth_img.astype('uint8')
+    depth_img_8=depth_img.astype('uint8')
     
 
     x_halfway=585
     # image=image[:,x_halfway:,:]
     # image=cv2.flip(image, 2) #flip across yaxis
     # image=cv2.flip(image, 0)  #flip across x-axis
-    rect_bound=image.copy()
-    height,width=image.shape[0:2]
+    rect_bound=image_orig.copy()
+    height,width=image_orig.shape[0:2]
 
 #_____________________Close Holes_____________####
     close_size1,close_size2,shape_num = get_trackbar_values2("close")
@@ -316,7 +320,7 @@ while True:
     kernel_close2=cv2.getStructuringElement(shape,(close_size2,close_size2))
 
     
-    mask_close=cv2.dilate(depth_img,kernel_close1,iterations=1)
+    mask_close=cv2.dilate(depth_img_8,kernel_close1,iterations=1)
     mask_close=cv2.erode(mask_close,kernel_close2,iterations=1)
     cv2.imshow("closing",mask_close)
 
@@ -337,8 +341,8 @@ while True:
     dilate_kernel=cv2.getStructuringElement(shape,(depth_dilate_size,depth_dilate_size))
     depth_img_dilate= cv2.dilate(mask_erode, dilate_kernel, iterations=1)
 #______________-bitwise______________#
-    image_at_depth=cv2.bitwise_and(image,image,mask=depth_img_dilate)
-    cv2.imshow('depth_masked',image_at_depth)
+    image_at_depth=cv2.bitwise_and(image_orig,image_orig,mask=depth_img_dilate)
+    
     image=image_at_depth
 
 
@@ -589,6 +593,7 @@ while True:
                         if dist<min_dist:
                             min_dist=dist
                             closest_circle=i
+                        
                     brick_x_offset,brick_y_offset=brick_offset[brick_num]
                     brick_centers.append((int(closest_circle[0])+brick_x_offset,int(closest_circle[1])+brick_y_offset))
                     cv2.circle(brk_img,((int(closest_circle[0]),int(closest_circle[1]))),int(closest_circle[2]),(0,255,0),2)
@@ -596,7 +601,7 @@ while True:
                 if show_bricks:
                         # eq_brk=cv2.equalizeHist(cv2.cvtColor(brk_img,cv2.COLOR_BGR2GRAY))
                         cv2.circle(rect_bound,brick_centers[brick_num],3,(0,0,255),4)
-                        # cv2.imshow(brick_names[brick_num],cv2.cvtColor(brk_img,cv2.COLOR_BGR2GRAY))
+                        cv2.imshow(brick_names[brick_num],cv2.cvtColor(brk_img,cv2.COLOR_BGR2GRAY))
         
 
 #_______________Canny Edge Detection____________#
@@ -659,6 +664,7 @@ while True:
 
     cv2.imshow("orig",image)
     cv2.imshow("mask",mask)
+    cv2.imshow('depth_masked',image_at_depth)
     cv2.imshow("erode",mask_erode)
     cv2.imshow("dilate after erode",mask_dilate)
     # cv2.imshow("disp",disp_image)
@@ -673,6 +679,12 @@ while True:
 
     key=cv2.waitKey(1)
     if key & 0xFF is ord('q'):
+        print([H_min, S_min, V_min, H_max, S_max, V_max,
+    erode_size, iter_erode, dilate_size, iter_dilate,shape,
+    close_size1, close_size2, shape_num,
+    low_area, up_area, padding,
+    lower_threshold, upper_threshold, aper,
+    arg1, arg2, min_distance, dp_100,min_rad, max_rad],' depth ',[lower_depth, upper_depth])
         break
     elif key==ord('s'):
         cv2.imwrite("final_display3.png",disp_gray)
