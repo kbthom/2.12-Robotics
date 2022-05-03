@@ -28,10 +28,14 @@ cv_bridge=CvBridge()
 
 color='blue'
 
-image=cv2.imread("kyle_color_1.png")
-depth_image=cv2.imread("kyle_depth_1.png")
-image=1
-depth_image=1
+image=cv2.imread("color_image_all_4.png")
+depth_image=cv2.imread("depth_image_all_4.npy")
+# image=1
+# depth_image=1
+end_effector_id=10
+table_id=9
+table_tag=0
+end_effector_tag=0
 
 
 def convertToOpenCVHSV(H,S,V):
@@ -137,7 +141,7 @@ def get_pixel_depth(x,y,data):
 color_search_order=['blue','green','red','yellow']
 color_search_order=['yellow','blue']
 
-def get_paramaters(color):
+def get_paramaters(color,dp):
     """
     Grab Parameters for color
     
@@ -148,22 +152,18 @@ def get_paramaters(color):
     low_area, up_area, padding,
     lower_threshold, upper_threshold, aper,
     arg1, arg2, min_distance, dp_100,min_rad, max_rad,
-    """
-    yellow=[22,105,192,41,255,255,
-            6,1,10,1,MORPH_ELLIPSE,
-            30,48,1,
-            8372,23993,2,
-            201,127,3,
-            124,28,10,100,16,50]
-    blue=[102,129,101,129,255,255,
-            6,1,10,1,MORPH_ELLIPSE,
-            30,48,1,
-            8372,29070,2,
-            201,127,3,
-            124,28,10,100,16,50]
+    lower_depth, upper_depth,close_size1,close_size2
 
-    color_vals={'blue':blue,'green':[],'yellow':yellow,'red':[]}
-    return color_vals[color]
+
+    """
+    yellow=[15, 47, 184, 68, 255, 255, 6, 1, 10, 1, MORPH_ELLIPSE, 30, 38, 0, 15500, 31953, 2, 201, 127, 3, 124, 28, 10, 100, 16, 50]
+    blue=[99, 150, 89, 137, 255, 255, 6, 1, 10, 1, MORPH_ELLIPSE, 28, 30, 0, 15500, 27219, 2, 201, 127, 3, 165, 28, 10, 100, 16, 50]
+    green=[84, 172, 75, 96, 255, 255, 6, 1, 10, 1, MORPH_ELLIPSE, 18, 16, 0, 15500, 28000, 2, 201, 127, 3, 124, 28, 10, 100, 16, 50]
+    red=[127, 59, 105, 179, 255, 255, 6, 1, 10, 1, MORPH_ELLIPSE, 33, 31, 0, 15500, 27811, 2, 201, 127, 3, 124, 28, 10, 100, 16, 50]
+
+    color_vals={'blue':blue,'green':green,'yellow':yellow,'red':red}
+    depth_vals=[[0,771,30,34,25000,38000],[755,876,30,35,16000,32000],[847,947,19,27,8200,30000],[957,1019,19,32,8000,30000]]
+    return color_vals[color]+depth_vals[dp]
 
 def depth_image_func(msg):
      global depth_image
@@ -210,9 +210,11 @@ def april_tag_info(id):
     Args:
         id (int): id of april tag whose information you would like
     Returns:
-        info (tuple): (centerx,centery,angle) center x, y are floats
+        info (tuple): (centerx,centery,angle,median_depth) center x, y are floats
     """
     global image
+    global end_effector_id
+
     img=cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
     result=detector.detect(img)
     for index in range(len(result)):
@@ -220,15 +222,33 @@ def april_tag_info(id):
             center_loc=result[index].center
             center_x=center_loc[0]
             center_y=center_loc[1]
+
+            corners=result[index].corners
+
             top_right_loc=result[index].corners[1]
             top_right_x=top_right_loc[0]
             top_right_y=top_right_loc[1]
-            angle=math.atan2(center_y-top_right_y,top_right_x-center_x)
 
-            return (center_x,center_y,angle)
+            top_left_loc=result[index].corners[0]
+            top_left_x=top_left_loc[0]
+            top_left_y=top_left_loc[1]
+
+            width=corners[1][0]-corners[0][0]
+            height=corners[2][1]-corners[1][1]
+            small_square_depth=depth_image[int(center_y-height/8):int(center_y+height/8), int(center_x-width/8):int(center_x+width/8)]
+            sorted_small_square_depth=np.sort(small_square_depth)
+            median_depth=np.median(sorted_small_square_depth)
+            angle=math.atan2(top_left_y-top_right_y,top_right_x-top_left_x)
+
+
+            cv2.line(image,(int(top_left_x),int(top_left_y)),(int(top_right_x),int(top_right_y)),(255,0,0),3)
+            cv2.imshow('april_detect',image)
+            cv2.waitKey(0)
+
+            return (center_x,center_y,angle,median_depth)
 
 brick_height=82.5
-table_to_camera=1028
+table_to_camera=1049
 safety_net=12
 
 levels=[[table_to_camera+15,table_to_camera-brick_height-safety_net],[table_to_camera-brick_height-safety_net,table_to_camera-2*brick_height-safety_net],[table_to_camera-2*brick_height-safety_net,table_to_camera-3*brick_height-safety_net],[table_to_camera-3*brick_height-safety_net,table_to_camera-4*brick_height-safety_net]] #ranges of depths for brick to be expected
@@ -252,32 +272,50 @@ def create_level_image(depth_array,image):
         level-=1
     print('depth failure')
 
- 
 
-def find_z_from_average_depth(depth):
+
+def find_brick_height_from_average_depth(depth):
     if depth<740:
         return False
     elif depth>levels[3][0] and depth<levels[3][1]:
-        return brick_height*4
+        return 4
     elif depth>=levels[2][0] and depth<levels[2][1]:
-        return brick_height*3
+        return 3
     elif depth>=levels[1][0] and depth<levels[1][1]:
-        print('lev1')
-        return brick_height*2
+        return 2
     elif depth>=levels[0][0] and depth<levels[0][1]:
-        print('here')
-        return brick_height*1
+        return 1
     return False
+
+
+
+def create_depth_mask(depth_range):
+    lower_depth=depth_range[0]
+    upper_depth=depth_range[1]
+    depth_img=np.where((depth_image>lower_depth) & (depth_image<upper_depth),255,0)
+    depth_img=depth_img.astype('uint8')
     
+    image_at_depth=cv2.bitwise_and(image,image,mask=depth_img)
+    return image_at_depth
+#brick level in increasing height list of lists [min,max]
+# brick_levels=[[0,746],[747,822],[849,918],[919,1000]]
+brick_levels=[[0,746],[747,822],[825,960],[965,1000]]  
 
 def find_brick_center():
     global image
     global depth_image
+    global table_id
+    global table_tag
+    global end_effector_tag
 
-    end_effector_tag=april_tag_info(end_effector_id)
-
-    # image=image[:,end_effector_tag[0]:]
-
+    table_tag=april_tag_info(table_id)
+    table_offset=3
+    if table_tag:
+        # image=image[:,end_effector_tag[0]:]
+        end_effector_offset=3  #offset to cut off to the left of april tag
+        image[:,0:int(table_tag[0])-table_offset]=(0,0,0)
+    else:
+        print('did not find table tag')
 
     print('starting main')
     # image=cv2.imread("kyle_color_1.png")
@@ -294,118 +332,74 @@ def find_brick_center():
     brick_names=[]
     brick_offset=[]
 
-    for color in color_search_order:
-        #find bricks (organized by depth)
+    final_bricks=[] #list containing all bricks x,y center location and angle in radians
+    color='blue'
+    for dp in range(len(brick_levels)):
+        paramaters=get_paramaters(color,dp)
+        print(paramaters)
+        print(len(paramaters))
+        depth_lower,depth_upper=paramaters[26:28]
+        brick_stack=4-dp
 
-        paramaters=get_paramaters(color)
+        image_at_depth=create_depth_mask([depth_lower,depth_upper])
+        cv2.imshow('depth'+str(brick_stack),image_at_depth)
+        cv2.waitKey(0)
 
-#___________________HSV Converstion and HSV removal Mask__________-#        
-        H_min, S_min, V_min, H_max, S_max, V_max=paramaters[0:6]
-        pre_mask=cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-        mask=cv2.inRange(pre_mask, (H_min, S_min, V_min), (H_max, S_max, V_max))
+        for color in color_search_order:
+            #find bricks (organized by depth)
+            paramaters=get_paramaters(color,dp)
 
-#_________________Erode and Dilate after HSV Removal______________#
-        erode_size, iter_erode, dilate_size, iter_dilate,shape=paramaters[6:11]
+            
 
-        erod_kernel=cv2.getStructuringElement(shape,(erode_size,erode_size))
-        mask_erode =cv2.erode(mask, erod_kernel, iterations=iter_erode)
+    #___________________HSV Converstion and HSV removal Mask__________-#        
+            H_min, S_min, V_min, H_max, S_max, V_max=paramaters[0:6]
+            pre_mask=cv2.cvtColor(image_at_depth, cv2.COLOR_BGR2HSV)
+            mask=cv2.inRange(pre_mask, (H_min, S_min, V_min), (H_max, S_max, V_max))
 
-        dilate_kernel=cv2.getStructuringElement(shape,(dilate_size,dilate_size))
-        mask_dilate= cv2.dilate(mask_erode, dilate_kernel, iterations=iter_dilate)
-    
-#_____________________Close Holes_____________####
-        close_size1,close_size2,shape_num=paramaters[11:14]
+    #_________________Erode and Dilate after HSV Removal______________#
+            erode_size, iter_erode, dilate_size, iter_dilate,shape=paramaters[6:11]
 
-        kernel_close1=cv2.getStructuringElement(shape,(close_size1,close_size1))
-        kernel_close2=cv2.getStructuringElement(shape,(close_size2,close_size2))
+            erod_kernel=cv2.getStructuringElement(shape,(erode_size,erode_size))
+            mask_erode =cv2.erode(mask, erod_kernel, iterations=iter_erode)
 
-        mask_close=cv2.dilate(mask_dilate,kernel_close1,iterations=1)
-        mask_close=cv2.erode(mask_close,kernel_close2,iterations=1)
+            dilate_kernel=cv2.getStructuringElement(shape,(dilate_size,dilate_size))
+            mask_dilate= cv2.dilate(mask_erode, dilate_kernel, iterations=iter_dilate)
+        
+    #_____________________Close Holes_____________####
+            close_size1,close_size2,shape_num=paramaters[28:30]+[1]
 
-#_____________grabs only objects from eroded dilated binary mask from original image____________#
-        disp_image=cv2.bitwise_and(image,image, mask=mask_dilate)
-        disp_gray=cv2.cvtColor(disp_image, COLOR_BGR2GRAY)
+            kernel_close1=cv2.getStructuringElement(shape,(close_size1,close_size1))
+            kernel_close2=cv2.getStructuringElement(shape,(close_size2,close_size2))
 
-    #_________Locate Brick Rectangles_______________________###
+            mask_close=cv2.dilate(mask_dilate,kernel_close1,iterations=1)
+            mask_close=cv2.erode(mask_close,kernel_close2,iterations=1)
 
-        # brick_local_centers=[] #center in local brick frame
-        # brick_images=[]
-        # brick_names=[]
-        # brick_offset=[]
+    #_____________grabs only objects from eroded dilated binary mask from original image____________#
+            disp_image=cv2.bitwise_and(image,image, mask=mask_dilate)
+            disp_gray=cv2.cvtColor(disp_image, COLOR_BGR2GRAY)
 
-        grouped_brick_offset=[]
-        grouped_brick_local_centers=[] #center in local brick frame
-        grouped_brick_images=[]
-        grouped_brick_names=[]
+        #_________Locate Brick Rectangles_______________________###
 
-        final_bricks=[] #list containing all bricks x,y center location and angle in radians
+            # brick_local_centers=[] #center in local brick frame
+            # brick_images=[]
+            # brick_names=[]
+            # brick_offset=[]
 
-        grab_image=image.copy()
-        low_area, up_area, padding = paramaters[14:17]
+            grouped_brick_offset=[]
+            grouped_brick_local_centers=[] #center in local brick frame
+            grouped_brick_images=[]
+            grouped_brick_names=[]
 
-        # ##__Grabs contours of HSV removal mask after noise was removed##
-        # im3,contours,hierarchy=cv2.findContours(mask_dilate.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
+            
 
-        contours=cv2.findContours(mask_dilate.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
-        contours=imutils.grab_contours(contours)
-        # contours=contours[0]
+            grab_image=image.copy()
+            low_area, up_area, padding = paramaters[14:17]
+            low_area, up_area=paramaters[30:]
 
-        for contr in contours:
-            M=cv2.moments(contr)
-            if M['m00']!=0:
-                cx=int(M['m10']/M['m00'])
-                cy=int(M['m01']/M['m00'])
-            area=cv2.contourArea(contr)
-            rect = cv2.minAreaRect(contr)
-            box = cv2.boxPoints(rect)
-            box = np.int0(box)
+            # ##__Grabs contours of HSV removal mask after noise was removed##
+            # im3,contours,hierarchy=cv2.findContours(mask_dilate.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
 
-            if area>low_area and area<up_area: #If area of contour found is in correct regime
-                M=cv2.moments(contr)
-                cx=int(M['m10']/M['m00'])
-                cy=int(M['m01']/M['m00'])
-                #############draw line orientation
-                angle=180-rect[2]
-                orient=angle-90
-                if rect[1][0]>rect[1][1]:
-                    orient=angle
-                theta=orient*np.pi/180
-
-                brick_angles.append(theta)
-
-                #### add contour to bricks list
-                bricks.append(contr)
-
-                x,y,w,h = cv2.boundingRect(contr)
-                brick_local_centers.append((cx-x+padding,cy-y+padding))
-                brick_image_current=grab_image[y-padding:y+h+padding,x-padding:x+w+padding]
-                brick_offset.append((x-padding,y-padding))
-                brick_images.append(brick_image_current)
-                brick_names.append("brick_"+str((cx,cy)))
-                brick_colors.append(color)
-
-            elif area>up_area:  
-                #looks at larger contour areas incase bricks were grouped into a larger group
-                M=cv2.moments(contr)
-                cx=int(M['m10']/M['m00'])
-                cy=int(M['m01']/M['m00'])
-
-                ####___--if cx and cy in certatin regime add them
-                x,y,w,h = cv2.boundingRect(contr)
-                grouped_brick_local_centers.append((cx-x+padding,cy-y+padding))
-                grouped_brick_image_current=disp_gray.copy()[y-padding:y+h+padding,x-padding:x+w+padding]
-                grouped_brick_offset.append((x-padding,y-padding))
-                grouped_brick_images.append(grouped_brick_image_current)
-                grouped_brick_names.append("brick_"+str((cx,cy)))
-
-        lower_threshold, upper_threshold,aper = paramaters[17:20]
-
-        for i in range(len(grouped_brick_images)):
-        #Going through these potential groupings of bricks for more intensive check
-            x_offset,y_offset=grouped_brick_offset[i]
-            cannyblob = cv2.Canny(cv2.equalizeHist(grouped_brick_images[i]),lower_threshold,upper_threshold,apertureSize = aper)
-
-            contours=cv2.findContours(cannyblob.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
+            contours=cv2.findContours(mask_dilate.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
             contours=imutils.grab_contours(contours)
             # contours=contours[0]
 
@@ -419,138 +413,260 @@ def find_brick_center():
                 box = cv2.boxPoints(rect)
                 box = np.int0(box)
 
-                if area>low_area and area<up_area:
+                if area>low_area and area<up_area: #If area of contour found is in correct regime
                     M=cv2.moments(contr)
                     cx=int(M['m10']/M['m00'])
                     cy=int(M['m01']/M['m00'])
-                    
+                    #############draw line orientation
                     angle=180-rect[2]
                     orient=angle-90
                     if rect[1][0]>rect[1][1]:
                         orient=angle
-
                     theta=orient*np.pi/180
+
                     brick_angles.append(theta)
-                    ####___--if cx and cy in certatin regime add them
+
+                    #### add contour to bricks list
                     bricks.append(contr)
+
                     x,y,w,h = cv2.boundingRect(contr)
-                    brick_local_centers.append((cx-x+padding+x_offset,cy-y+padding+y_offset))
-                    
-                    brick_image_current=grab_image[y-padding+y_offset:y+h+padding+y_offset,x-padding+x_offset:x+w+padding+x_offset]
-                    brick_offset.append((x-padding+x_offset,y-padding+y_offset))
+                    brick_local_centers.append((cx-x+padding,cy-y+padding))
+                    brick_image_current=grab_image[y-padding:y+h+padding,x-padding:x+w+padding]
+                    brick_offset.append((x-padding,y-padding))
                     brick_images.append(brick_image_current)
+                    brick_names.append("brick_"+str((cx,cy)))
                     brick_colors.append(color)
-                    brick_names.append("brick_"+str((cx+x_offset,cy+y_offset)))
 
-    
-#____________________locate center hole in bricks with hough circle detection_____________#
+                elif area>up_area:  
+                    #looks at larger contour areas incase bricks were grouped into a larger group
+                    M=cv2.moments(contr)
+                    cx=int(M['m10']/M['m00'])
+                    cy=int(M['m01']/M['m00'])
+
+                    ####___--if cx and cy in certatin regime add them
+                    x,y,w,h = cv2.boundingRect(contr)
+                    grouped_brick_local_centers.append((cx-x+padding,cy-y+padding))
+                    grouped_brick_image_current=disp_gray.copy()[y-padding:y+h+padding,x-padding:x+w+padding]
+                    grouped_brick_offset.append((x-padding,y-padding))
+                    grouped_brick_images.append(grouped_brick_image_current)
+                    grouped_brick_names.append("brick_"+str((cx,cy)))
+
+            lower_threshold, upper_threshold,aper = paramaters[17:20]
+
+            for i in range(len(grouped_brick_images)):
+            #Going through these potential groupings of bricks for more intensive check
+                x_offset,y_offset=grouped_brick_offset[i]
+                cannyblob = cv2.Canny(cv2.equalizeHist(grouped_brick_images[i]),lower_threshold,upper_threshold,apertureSize = aper)
+
+                contours=cv2.findContours(cannyblob.copy(),cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
+                contours=imutils.grab_contours(contours)
+                # contours=contours[0]
+
+                for contr in contours:
+                    M=cv2.moments(contr)
+                    if M['m00']!=0:
+                        cx=int(M['m10']/M['m00'])
+                        cy=int(M['m01']/M['m00'])
+                    area=cv2.contourArea(contr)
+                    rect = cv2.minAreaRect(contr)
+                    box = cv2.boxPoints(rect)
+                    box = np.int0(box)
+
+                    if area>low_area and area<up_area:
+                        M=cv2.moments(contr)
+                        cx=int(M['m10']/M['m00'])
+                        cy=int(M['m01']/M['m00'])
+                        
+                        angle=180-rect[2]
+                        orient=angle-90
+                        if rect[1][0]>rect[1][1]:
+                            orient=angle
+
+                        theta=orient*np.pi/180
+                        brick_angles.append(theta)
+                        ####___--if cx and cy in certatin regime add them
+                        bricks.append(contr)
+                        x,y,w,h = cv2.boundingRect(contr)
+                        brick_local_centers.append((cx-x+padding+x_offset,cy-y+padding+y_offset))
+                        
+                        brick_image_current=grab_image[y-padding+y_offset:y+h+padding+y_offset,x-padding+x_offset:x+w+padding+x_offset]
+                        brick_offset.append((x-padding+x_offset,y-padding+y_offset))
+                        brick_images.append(brick_image_current)
+                        brick_colors.append(color)
+                        brick_names.append("brick_"+str((cx+x_offset,cy+y_offset)))
+
         
-    arg1,arg2,min_distance,dp_100,min_rad,max_rad=paramaters[20:26]
+    #____________________locate center hole in bricks with hough circle detection_____________#
+            
+        arg1,arg2,min_distance,dp_100,min_rad,max_rad=paramaters[20:26]
 
-    for brick_num in range(len(brick_images)):
-        brk_img=brick_images[brick_num]
+        for brick_num in range(len(brick_images)):
+            brk_img=brick_images[brick_num]
 
-        # cv2.imshow("brick "+str(brick_num),brk_img)
-        circle_image=cv2.cvtColor(brk_img.copy(),cv2.COLOR_BGR2GRAY)
-        circle_image=cv2.equalizeHist(circle_image)
+            # cv2.imshow("brick "+str(brick_num),brk_img)
+            circle_image=cv2.cvtColor(brk_img.copy(),cv2.COLOR_BGR2GRAY)
+            circle_image=cv2.equalizeHist(circle_image)
 
-        dp=dp_100/100
+            dp=dp_100/100
 
-        circles = cv2.HoughCircles(circle_image,cv2.HOUGH_GRADIENT,dp,min_distance,param1=arg1,param2=arg2,minRadius=min_rad,maxRadius=max_rad)
+            circles = cv2.HoughCircles(circle_image,cv2.HOUGH_GRADIENT,dp,min_distance,param1=arg1,param2=arg2,minRadius=min_rad,maxRadius=max_rad)
 
-        if circles is not None:
+            if circles is not None:
 
-            circles = (np.around(circles))
-            min_dist=float('inf')
+                circles = (np.around(circles))
+                min_dist=float('inf')
 
-            for i in circles[0,:]:
-                brick_local_centers[brick_num][0]
-                brick_local_centers[brick_num][1]
-                dist=(int(i[0])-brick_local_centers[brick_num][0])**2+(int(i[1])-brick_local_centers[brick_num][1])**2
+                for i in circles[0,:]:
+                    brick_local_centers[brick_num][0]
+                    brick_local_centers[brick_num][1]
+                    dist=(int(i[0])-brick_local_centers[brick_num][0])**2+(int(i[1])-brick_local_centers[brick_num][1])**2
 
-                if dist<min_dist:
-                    min_dist=dist
-                    closest_circle=i
+                    if dist<min_dist:
+                        min_dist=dist
+                        closest_circle=i
 
-            brick_x_offset,brick_y_offset=brick_offset[brick_num]
-            brick_centers.append((int(closest_circle[0])+brick_x_offset,int(closest_circle[1])+brick_y_offset))
+                brick_x_offset,brick_y_offset=brick_offset[brick_num]
+                brick_centers.append((int(closest_circle[0])+brick_x_offset,int(closest_circle[1])+brick_y_offset))
 
-#______________sort bricks by decreasing depth____________##
+    #______________sort bricks by decreasing depth____________##
+        
+        # depth_brick_indicies=[]
+        # depth_avg=[]
+
+        # for i in range(len(bricks)):
+        #     empty_img=np.zeros_like(image[:,:,0])
+        #     cv2.drawContours(empty_img,bricks,i,color=255,thickness=-1)
+        #     avg=np.average(depth_image[np.where(empty_img==255)])
+        #     depth_avg.append(avg)
+        #     depth_brick_indicies.append(i)
+
+        # zipped_list=zip(depth_avg,depth_brick_indicies)
+        # sorted_zipped_list=sorted(zipped_list)
+
+        # sorted_bricks_indices=[element for _, element in sorted_zipped_list]
+
+        # sorted_brick_images=[]
+        # sorted_depth_averages=depth_avg
+        # sorted_brick_angles=[]
+        # sorted_brick_centers=[]
+        
+        # end_effector_x=end_effector_tag[0]
+        # end_effector_y=end_effector_tag[1]
+        # end_effector_angle=end_effector_tag[2]
+
+        # end_effector_x,end_effector_y,z=convert_pixel_color(end_effector_x,end_effector_y,depth_image[int(end_effector_y),int(end_effector_x)])
+        # for index in sorted_bricks_indices:
+        #     brick_center_x=brick_centers[index][0]
+        #     brick_center_y=brick_centers[index][1]
+        #     brick_angle=brick_angles[index]
+        #     brick_image=brick_images[index]
+
+        #     brick_image=cv2.circle(brick_image,(brick_center_x,brick_center_y),2,(0,0,255),3)
+        #     depth=sorted_depth_averages[index]
+        #     brick_z=find_brick_height_from_average_depth(depth)
+        #     sorted_brick_images.append(brick_image)
+
+        #     brick_center_x, brick_center_y,depth=convert_pixel_color(brick_center_x,brick_center_y,depth)
+
+
+
+        #     final_bricks.append((brick_center_x- end_effector_x,brick_center_y- end_effector_y,brick_z,brick_angle-end_effector_angle,brick_image))  
+
+
+    #___________________constructing final brick list___________####
+
+        if brick_centers: #if it has found brick centers at this height construct final brick list and return else move on
+            end_effector_x=end_effector_tag[0]
+            end_effector_y=end_effector_tag[1]
+            end_effector_angle=end_effector_tag[2]
+
+            global_end_effector_x,global_end_effector_y,end_effector_depth=convert_pixel_color(end_effector_x,end_effector_y,end_effector_tag[3])
+            for index in range(len(brick_centers)):
+                brick_center_x=brick_centers[index][0]
+                brick_center_y=brick_centers[index][1]
+                brick_angle=brick_angles[index]
+                brick_image=brick_images[index]
+
+                cv2.circle(image,(brick_center_x,brick_center_y),2,(0,0,255),3)
+                cv2.line(image,(brick_center_x,brick_center_y),(int(brick_center_x+30*math.cos(brick_angle)),int(brick_center_y-30*math.sin(brick_angle))),[0,255,0],2)
+
+
+
+                brick_level=brick_stack #what number of bricks high is it
+
+
+                brick_center_x, brick_center_y,depth=convert_pixel_color(brick_center_x,brick_center_y,table_to_camera-(brick_level*82.5))
+                print((brick_angle)*180/np.pi)
+                print((end_effector_angle)*180/np.pi)
+                print('here',(brick_angle-end_effector_angle)*180/np.pi)
+                final_bricks.append((brick_center_x - global_end_effector_x,brick_center_y - global_end_effector_y , brick_level ,brick_angle-end_effector_angle,brick_image))
+                
+            return final_bricks
+
+    return "failed"
+
+def main(end_effect_tag,calibrate,first):
+    global end_effector_tag
+
+    listener()
+    sleep(1)
+
+    if calibrate and first:
+        end_effector_tag=april_tag_info(end_effector_id)
+        end_effector_x=end_effector_tag[0]
+        end_effector_y=end_effector_tag[1]
+        end_effector_angle=end_effector_tag[2]
+
+        global_end_effector_x,global_end_effector_y,end_effector_depth=convert_pixel_color(end_effector_x,end_effector_y,end_effector_tag[3])
+        return (global_end_effector_x,global_end_effector_y,end_effector_depth,end_effector_angle)
+    elif calibrate:
+        end_effector_tag=april_tag_info(end_effector_id)
+        return end_effector_tag
+    # end_effector_id=10
     
-    depth_brick_indicies=[]
-    depth_avg=[]
+    else:
 
-    for i in range(len(bricks)):
-        empty_img=np.zeros_like(image[:,:,0])
-        cv2.drawContours(empty_img,bricks,i,color=255,thickness=-1)
-        avg=np.average(depth_image[np.where(empty_img==255)])
-        depth_avg.append(avg)
-        depth_brick_indicies.append(i)
+        end_effector_tag=end_effect_tag
 
-    zipped_list=zip(depth_avg,depth_brick_indicies)
-    sorted_zipped_list=sorted(zipped_list)
+        
+        
+        cv2.imshow('depth',depth_image)
+        final_bricks=find_brick_center()
+        
+        final_brick_indices=[]
+        final_brick_x=[]
+        final_brick_y=[]
+        if isinstance(final_bricks,list):
+            for index in range(len(final_bricks)):
+                final_brick_indices.append(index)
+                final_brick_x.append((final_bricks[index][0]-end_effector_tag[0])**2)
+                final_brick_y.append((final_bricks[index][1]-end_effector_tag[1])**2)
+            zipped_list_x1=zip(final_brick_x,final_brick_indices)
+            zipped_list_x2=zip(final_brick_x,final_brick_y)
+            sorted_zipped_list_x1=sorted(zipped_list_x1)
+            sorted_zipped_list_x2=sorted(zipped_list_x2)
+            x_sorted_index=[element for _,element in sorted_zipped_list_x1]
+            x_sorted_y=[element for _,element in sorted_zipped_list_x2]
+            zipped_list_index_y=zip(x_sorted_y,x_sorted_index)
+            sorted_zipped_list_x2=sorted(zipped_list_index_y)
 
-    sorted_bricks_indices=[element for _, element in sorted_zipped_list]
+            y_x_sorted_index=[element for _,element in sorted_zipped_list_x2]
 
-    sorted_brick_images=[]
-    sorted_depth_averages=depth_avg
-    sorted_brick_angles=[]
-    sorted_brick_centers=[]
-    
-    end_effector_x=end_effector_tag[0]
-    end_effector_y=end_effector_tag[1]
-    end_effector_angle=end_effector_tag[2]
+            destination=final_bricks[y_x_sorted_index[0]][0:4]
 
-    end_effector_x,end_effector_y,z=convert_pixel_color(end_effector_x,end_effector_y,depth_image[int(end_effector_y),int(end_effector_x)])
-    for index in sorted_bricks_indices:
-        brick_center_x=brick_centers[index][0]
-        brick_center_y=brick_centers[index][1]
-        brick_angle=brick_angles[index]
-        brick_image=brick_images[index]
-
-        brick_image=cv2.circle(brick_image,(brick_center_x,brick_center_y),2,(0,0,255),3)
-        depth=sorted_depth_averages[index]
-        brick_z=find_z_from_average_depth(depth)
-        sorted_brick_images.append(brick_image)
-
-        brick_center_x, brick_center_y,depth=convert_pixel_color(brick_center_x,brick_center_y,depth)
-
-
-
-        final_bricks.append((brick_center_x- end_effector_x,brick_center_y- end_effector_y,brick_z,brick_angle-end_effector_angle,brick_image))  
-
-    return final_bricks
-
+            cv2.imshow('brick wanted',final_bricks[y_x_sorted_index[0]][4])
+        for brk in final_bricks:
+            cv2.imshow(str(brk[2])+'  '+str(brk[0]),brk[4])
+        print(destination)
+        cv2.imshow('im',image)
+        cv2.waitKey(0)
+        return destination
 
 if __name__=='__main__':
     # rospy.init_node('tester',anonymous=True)
-    # end_effector_id=10
-    end_effector_id=9
-    listener()
-    sleep(1)
-    cv2.imshow('im',image)
-    cv2.imshow('depth',depth_image)
-    final_bricks=find_brick_center()
+    print(main((0,0,0,0),False,False))
+
     
-    destination=False
-    z=False
-    brk_num=0
-    
-    while z==False and brk_num<len(final_bricks):
-        print(brk_num)
-        destination=final_bricks[brk_num]
-        z=destination[2]
-        brk_num+=1
-
-
-    end_effector_tag=april_tag_info(end_effector_id)
-
-    print(final_bricks)
-
-    for brk in final_bricks:
-        cv2.imshow(str(brk[2])+'  '+str(brk[0]),brk[4])
-
-    cv2.waitKey(0)
 
     # if destination:
     #     print(destination)
