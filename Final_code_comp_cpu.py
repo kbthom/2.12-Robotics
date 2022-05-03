@@ -11,7 +11,7 @@ import math
 from cv2 import edgePreservingFilter
 import numpy as np
 import imutils
-# from scipy import signal
+from scipy import signal
 
 import rospy
 from sensor_msgs.msg import Image, CameraInfo
@@ -28,8 +28,8 @@ cv_bridge=CvBridge()
 
 color='blue'
 
-image=cv2.imread("color_image_all_4.png")
-depth_image=cv2.imread("depth_image_all_4.npy")
+image=cv2.imread("color_image_room1.png")
+depth_image=np.load("depth_image_room1.npy",allow_pickle=True,fix_imports=True)
 # image=1
 # depth_image=1
 end_effector_id=10
@@ -242,7 +242,7 @@ def april_tag_info(id):
 
 
             cv2.line(image,(int(top_left_x),int(top_left_y)),(int(top_right_x),int(top_right_y)),(255,0,0),3)
-            cv2.imshow('april_detect',image)
+            # cv2.imshow('april_detect',image)
             cv2.waitKey(0)
 
             return (center_x,center_y,angle,median_depth)
@@ -342,7 +342,6 @@ def find_brick_center():
         brick_stack=4-dp
 
         image_at_depth=create_depth_mask([depth_lower,depth_upper])
-        cv2.imshow('depth'+str(brick_stack),image_at_depth)
         cv2.waitKey(0)
 
         for color in color_search_order:
@@ -353,9 +352,9 @@ def find_brick_center():
 
     #___________________HSV Converstion and HSV removal Mask__________-#        
             H_min, S_min, V_min, H_max, S_max, V_max=paramaters[0:6]
+            print(paramaters[0:6])
             pre_mask=cv2.cvtColor(image_at_depth, cv2.COLOR_BGR2HSV)
             mask=cv2.inRange(pre_mask, (H_min, S_min, V_min), (H_max, S_max, V_max))
-
     #_________________Erode and Dilate after HSV Removal______________#
             erode_size, iter_erode, dilate_size, iter_dilate,shape=paramaters[6:11]
 
@@ -608,8 +607,8 @@ def find_brick_center():
 def main(end_effect_tag,calibrate,first):
     global end_effector_tag
 
-    listener()
-    sleep(1)
+    # listener()
+    # sleep(1)
 
     if calibrate and first:
         end_effector_tag=april_tag_info(end_effector_id)
@@ -630,7 +629,7 @@ def main(end_effect_tag,calibrate,first):
 
         
         
-        cv2.imshow('depth',depth_image)
+        # cv2.imshow('depth',depth_image)
         final_bricks=find_brick_center()
         
         final_brick_indices=[]
@@ -655,10 +654,10 @@ def main(end_effect_tag,calibrate,first):
             destination=final_bricks[y_x_sorted_index[0]][0:4]
 
             cv2.imshow('brick wanted',final_bricks[y_x_sorted_index[0]][4])
-        for brk in final_bricks:
-            cv2.imshow(str(brk[2])+'  '+str(brk[0]),brk[4])
-        print(destination)
-        cv2.imshow('im',image)
+        # for brk in final_bricks:
+            # cv2.imshow(str(brk[2])+'  '+str(brk[0]),brk[4])
+        # print(destination)
+        # cv2.imshow('im',image)
         cv2.waitKey(0)
         return destination
 
